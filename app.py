@@ -23,13 +23,15 @@ if __name__ == "__main__":
     # ------------------------------------------------
     print("\n--- CLASS TOPPERS ---")
     toppers = engine.get_class_toppers()
-    for i, row in toppers.iterrows():
-     print(f"\nRank {i}:")
-     print(f"Name: {row['student_name']}")
-     print(f"PRN: {row['roll_no']}")
-     print(f"SGPA: {row['sem_5_sgpa']}")
-     print(f"Percentage: {row['sem_5_percent']}")
-     print(f"Grade: {row['sem_5_grade']}")
+    for rank, (_, row) in enumerate(toppers.iterrows(), start=1):
+        print(f"\nRank {rank}:")
+        print(f"Name: {row[engine.name_col]}")
+        print(f"PRN: {row[engine.roll_col]}")
+        print(f"SGPA: {row[engine.sgpa_col]}")
+        if engine.percent_col:
+            print(f"Percentage: {row[engine.percent_col]}")
+        if "grade" in toppers.columns:
+            print(f"Grade: {row['grade']}")
 
     # ------------------------------------------------
     # SUBJECT SUMMARY
@@ -37,10 +39,13 @@ if __name__ == "__main__":
     print("\n--- SUBJECT SUMMARY ---")
     subject_summary = engine.get_subject_summary()
 
-    for subject, data in subject_summary.items():
-        print(f"\nSubject: {subject}")
-        for k, v in data.items():
-            print(f"  {k}: {v}")
+    if not subject_summary:
+        print("No subject-level P/F columns detected.")
+    else:
+        for subject, data in subject_summary.items():
+            print(f"\nSubject: {subject}")
+            for k, v in data.items():
+                print(f"  {k}: {v}")
 
     # ------------------------------------------------
     # STUDENT MATRIX
