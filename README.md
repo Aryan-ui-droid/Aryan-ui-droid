@@ -55,12 +55,17 @@ It automatically detects key academic fields and presents insights through an **
 
 ---
 
-## 📤 Export Options
+## 📸 Project Screenshots
 
-- 📄 Excel Reports  
-- 📁 CSV Files  
-- 📝 TXT Files  
-- 📦 ZIP Downloads  
+<p align="center">
+  <img src="assets/Screenshots/dashboard.png" width="45%">
+  <img src="assets/Screenshots/Subject graph & performance.png" width="45%">
+</p>
+
+<p align="center">
+  <img src="assets/Screenshots/Student Explorer.png" width="45%">
+  <img src="assets/Screenshots/Genrate Reports.png" width="45%">
+</p>
 
 ---
 
@@ -74,23 +79,12 @@ It automatically detects key academic fields and presents insights through an **
 
 ---
 
-## 📁 Project Structure
+## 👨‍💻 Author
 
-```text
-.
-├── dashboard.py              # Main Streamlit dashboard
-├── result_engine.py          # Core result analysis engine
-├── report_generator.py       # Excel report generation
-├── app.py                    # Script-based execution entry point
-├── data/
-│   ├── DS Result.xlsx        # Sample input workbook
-│   └── app.db                # SQLite database
-├── assets/
-│   └── login image.jpg       # Login page background image
-├── Final_Result_Report.xlsx
-├── Final_Result_Report_Term_I.xlsx
-├── Final_Result_Report_Term_III.xlsx
-├── Final_Result_Report_Term_IV.xlsx
-├── Final_Result_Report_Term_V.xlsx
-├── Final_Result_Report_Term_VII.xlsx
-└── requirements.txt
+**Aryan Tribhuvan**  
+🎓 CSE (IoT, Cyber Security & Blockchain)  
+📊 Aspiring Data Analyst  
+
+---
+
+⭐ If you like this project, consider giving it a star!

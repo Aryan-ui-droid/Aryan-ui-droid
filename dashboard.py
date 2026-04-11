@@ -1,6 +1,7 @@
 ﻿import io
 import os
 import sqlite3
+from html import escape
 from hashlib import pbkdf2_hmac, sha1
 from secrets import token_hex
 from base64 import b64encode
@@ -956,28 +957,165 @@ def apply_theme(theme):
             margin: 14px 0 20px;
         }}
         .topper-card {{
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 252, 255, 0.9) 100%);
+            --topper-accent: {theme['accent']};
+            position: relative;
+            overflow: hidden;
+            isolation: isolate;
+            background:
+                radial-gradient(circle at 88% 18%, rgba(255, 255, 255, 0.84) 0%, transparent 22%),
+                linear-gradient(165deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 250, 255, 0.92) 58%, rgba(255, 248, 241, 0.9) 100%);
             border: 1px solid rgba(136, 164, 194, 0.34);
-            border-radius: 18px;
-            padding: 16px 16px 14px;
-            min-height: 132px;
-            box-shadow: 0 10px 24px rgba(22, 42, 66, 0.08);
+            border-radius: 22px;
+            padding: 18px 18px 16px;
+            min-height: 188px;
+            box-shadow: 0 16px 30px rgba(22, 42, 66, 0.09);
+            backdrop-filter: blur(18px);
             transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
         }}
+        .topper-card::before {{
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.52) 42%, transparent 72%);
+            transform: translateX(-135%);
+            animation: shimmer 9s ease-in-out infinite;
+            pointer-events: none;
+        }}
+        .topper-card::after {{
+            content: "";
+            position: absolute;
+            width: 176px;
+            height: 176px;
+            right: -68px;
+            top: -62px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--topper-accent) 0%, transparent 70%);
+            opacity: 0.18;
+            pointer-events: none;
+        }}
         .topper-card:hover {{
-            transform: translateY(-4px);
-            box-shadow: var(--hover-shadow);
+            transform: translateY(-5px);
+            box-shadow: 0 22px 38px rgba(22, 42, 66, 0.14);
             border-color: rgba(15, 98, 181, 0.24);
         }}
+        .topper-card__header {{
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }}
+        .topper-card__rankblock {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }}
+        .topper-card__medal {{
+            width: 48px;
+            height: 48px;
+            border-radius: 15px;
+            display: grid;
+            place-items: center;
+            font-size: 1.4rem;
+            color: #ffffff;
+            background: linear-gradient(135deg, var(--topper-accent) 0%, {theme['accent_alt']} 100%);
+            box-shadow: 0 16px 26px rgba(18, 35, 63, 0.18);
+        }}
+        .topper-card__eyebrow {{
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }}
         .topper-rank {{
-            color: var(--accent);
-            font-size: 1.1rem;
-            margin: 0;
+            margin: 3px 0 0;
+            font-size: 1.12rem;
+            font-weight: 800;
+            color: var(--ink);
+        }}
+        .topper-card__score {{
+            position: relative;
+            z-index: 1;
+            min-width: 88px;
+            padding: 8px 12px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(255, 255, 255, 0.56);
+            box-shadow: 0 10px 18px rgba(18, 35, 63, 0.07);
+            text-align: right;
+        }}
+        .topper-card__score-label {{
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }}
+        .topper-card__score-value {{
+            margin-top: 3px;
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.28rem;
+            line-height: 1;
+            color: var(--ink);
         }}
         .topper-name {{
-            margin: 4px 0 8px 0;
+            position: relative;
+            z-index: 1;
+            margin: 16px 0 14px;
             font-weight: 800;
-            font-size: 0.97rem;
+            font-size: 1.02rem;
+            line-height: 1.42;
+            min-height: 54px;
+            color: var(--ink);
+        }}
+        .topper-card__meta {{
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }}
+        .topper-card__meta-item {{
+            padding: 11px 12px;
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(255, 255, 255, 0.56);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52);
+        }}
+        .topper-card__meta--full {{
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }}
+        .topper-card__meta-label {{
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }}
+        .topper-card__meta-value {{
+            margin-top: 5px;
+            font-weight: 800;
+            color: var(--ink);
+            line-height: 1.3;
+        }}
+        .topper-card__grade {{
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 11px;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 800;
+            color: var(--ink);
+            background: rgba(255, 255, 255, 0.82);
+            border: 1px solid rgba(255, 255, 255, 0.58);
         }}
         .chip {{
             display: inline-block;
@@ -1025,52 +1163,661 @@ def apply_theme(theme):
         }}
         .summary-tile {{
             --summary-accent: {theme['accent']};
-            background: linear-gradient(160deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 251, 255, 0.94) 100%);
+            position: relative;
+            overflow: hidden;
+            isolation: isolate;
+            background:
+                radial-gradient(circle at 88% 16%, rgba(255, 255, 255, 0.88) 0%, transparent 22%),
+                linear-gradient(160deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 251, 255, 0.94) 58%, rgba(240, 248, 255, 0.9) 100%);
             border: 1px solid rgba(136, 164, 194, 0.34);
-            border-top: 4px solid var(--summary-accent);
-            border-radius: 18px;
-            padding: 16px 18px 14px;
-            min-height: 128px;
-            box-shadow: 0 12px 26px rgba(14, 36, 61, 0.08);
+            border-radius: 22px;
+            padding: 18px 18px 16px;
+            min-height: 164px;
+            box-shadow: 0 14px 30px rgba(14, 36, 61, 0.08);
+            backdrop-filter: blur(18px);
             transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
         }}
+        .summary-tile::before {{
+            content: "";
+            position: absolute;
+            inset: auto -38px -52px auto;
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--summary-accent) 0%, transparent 68%);
+            opacity: 0.18;
+            pointer-events: none;
+        }}
+        .summary-tile::after {{
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-top: 4px solid var(--summary-accent);
+            border-radius: 22px;
+            pointer-events: none;
+        }}
         .summary-tile:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 18px 34px rgba(14, 36, 61, 0.12);
+            transform: translateY(-3px);
+            box-shadow: 0 20px 36px rgba(14, 36, 61, 0.12);
             border-color: rgba(15, 98, 181, 0.18);
         }}
         .summary-tile-active {{
             border-color: var(--summary-accent);
-            box-shadow: 0 18px 34px rgba(14, 36, 61, 0.14);
-            transform: translateY(-2px);
+            box-shadow: 0 22px 38px rgba(14, 36, 61, 0.15);
+            transform: translateY(-3px);
+        }}
+        .summary-tile__header {{
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }}
+        .summary-tile__eyebrow {{
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--summary-accent);
+            background: rgba(255, 255, 255, 0.74);
+            border: 1px solid rgba(255, 255, 255, 0.56);
+        }}
+        .summary-tile__icon {{
+            width: 50px;
+            height: 50px;
+            border-radius: 16px;
+            display: grid;
+            place-items: center;
+            font-size: 1.45rem;
+            color: #ffffff;
+            background: linear-gradient(135deg, var(--summary-accent) 0%, {theme['accent_alt']} 100%);
+            box-shadow: 0 16px 28px rgba(18, 35, 63, 0.18);
         }}
         .summary-tile__label {{
-            color: var(--muted);
-            font-size: 0.86rem;
-            font-weight: 700;
+            position: relative;
+            z-index: 1;
+            margin-top: 14px;
+            color: var(--ink);
+            font-size: 0.92rem;
+            font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: 0.35px;
+            letter-spacing: 0.08em;
         }}
         .summary-tile__value {{
-            margin-top: 10px;
-            font-size: 2.1rem;
-            font-weight: 800;
+            position: relative;
+            z-index: 1;
+            margin-top: 12px;
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.35rem;
             line-height: 1;
             color: var(--ink);
         }}
+        .summary-tile__footer {{
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 12px;
+            margin-top: 13px;
+        }}
         .summary-tile__hint {{
-            margin-top: 10px;
+            margin-top: 0;
+            color: var(--muted);
+            font-size: 0.88rem;
+            line-height: 1.5;
+            max-width: 200px;
+        }}
+        .summary-tile__signal {{
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 10px;
+            border-radius: 999px;
+            font-size: 0.76rem;
+            font-weight: 800;
+            color: var(--ink);
+            background: rgba(255, 255, 255, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.58);
+            white-space: nowrap;
+        }}
+        .cohort-stat {{
+            --stat-accent: {theme['accent']};
+            position: relative;
+            overflow: hidden;
+            min-height: 128px;
+            padding: 18px 18px 16px;
+            border-radius: 20px;
+            background: linear-gradient(160deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 251, 255, 0.94) 100%);
+            border: 1px solid rgba(136, 164, 194, 0.34);
+            box-shadow: 0 12px 26px rgba(14, 36, 61, 0.08);
+            backdrop-filter: blur(18px);
+            transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+        }}
+        .cohort-stat::before {{
+            content: "";
+            position: absolute;
+            width: 140px;
+            height: 140px;
+            right: -52px;
+            bottom: -60px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--stat-accent) 0%, transparent 68%);
+            opacity: 0.16;
+            pointer-events: none;
+        }}
+        .cohort-stat:hover {{
+            transform: translateY(-3px);
+            box-shadow: 0 20px 34px rgba(14, 36, 61, 0.12);
+        }}
+        .cohort-stat__row {{
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }}
+        .cohort-stat__label {{
+            font-size: 0.76rem;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }}
+        .cohort-stat__value {{
+            position: relative;
+            z-index: 1;
+            margin-top: 14px;
+            font-family: 'DM Serif Display', serif;
+            font-size: 2.25rem;
+            line-height: 1;
+            color: var(--ink);
+        }}
+        .cohort-stat__hint {{
+            position: relative;
+            z-index: 1;
+            margin-top: 12px;
             color: var(--muted);
             font-size: 0.88rem;
             line-height: 1.45;
+        }}
+        .cohort-stat__icon {{
+            width: 46px;
+            height: 46px;
+            border-radius: 15px;
+            display: grid;
+            place-items: center;
+            font-size: 1.25rem;
+            color: #ffffff;
+            background: linear-gradient(135deg, var(--stat-accent) 0%, {theme['accent_alt']} 100%);
+            box-shadow: 0 14px 24px rgba(18, 35, 63, 0.18);
+        }}
+        .tab-hero {{
+            --hero-accent: {theme['accent']};
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 16px;
+            padding: 22px 22px 18px;
+            border-radius: 24px;
+            background:
+                radial-gradient(circle at 88% 16%, rgba(255, 255, 255, 0.86) 0%, transparent 24%),
+                linear-gradient(160deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 250, 255, 0.92) 58%, rgba(255, 248, 241, 0.9) 100%);
+            border: 1px solid rgba(136, 164, 194, 0.34);
+            box-shadow: 0 16px 30px rgba(14, 36, 61, 0.08);
+            backdrop-filter: blur(18px);
+        }}
+        .tab-hero::before {{
+            content: "";
+            position: absolute;
+            width: 220px;
+            height: 220px;
+            right: -88px;
+            top: -92px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--hero-accent) 0%, transparent 70%);
+            opacity: 0.16;
+            pointer-events: none;
+        }}
+        .tab-hero::after {{
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.46) 44%, transparent 76%);
+            transform: translateX(-140%);
+            animation: shimmer 11s ease-in-out infinite;
+            pointer-events: none;
+        }}
+        .tab-hero__header {{
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 18px;
+        }}
+        .tab-hero__kicker {{
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 11px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--hero-accent);
+            background: rgba(255, 255, 255, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.58);
+        }}
+        .tab-hero__title {{
+            margin-top: 12px;
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.7rem;
+            line-height: 1.08;
+            color: var(--ink);
+        }}
+        .tab-hero__text {{
+            margin-top: 10px;
+            max-width: 860px;
+            font-size: 0.96rem;
+            line-height: 1.68;
+            color: var(--muted);
+        }}
+        .tab-hero__icon {{
+            position: relative;
+            z-index: 1;
+            width: 62px;
+            height: 62px;
+            border-radius: 20px;
+            display: grid;
+            place-items: center;
+            font-size: 1.7rem;
+            color: #ffffff;
+            background: linear-gradient(135deg, var(--hero-accent) 0%, {theme['accent_alt']} 100%);
+            box-shadow: 0 18px 30px rgba(18, 35, 63, 0.18);
+            flex-shrink: 0;
+        }}
+        .tab-hero__chips {{
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 16px;
+        }}
+        .tab-hero__chip {{
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 12px;
+            border-radius: 14px;
+            font-size: 0.84rem;
+            font-weight: 700;
+            color: var(--ink);
+            background: rgba(255, 255, 255, 0.76);
+            border: 1px solid rgba(255, 255, 255, 0.56);
+            box-shadow: 0 10px 20px rgba(18, 35, 63, 0.06);
+        }}
+        .insight-card {{
+            --insight-accent: {theme['accent']};
+            position: relative;
+            overflow: hidden;
+            min-height: 150px;
+            padding: 18px 18px 16px;
+            border-radius: 20px;
+            background:
+                radial-gradient(circle at 90% 16%, rgba(255, 255, 255, 0.88) 0%, transparent 22%),
+                linear-gradient(160deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 251, 255, 0.94) 100%);
+            border: 1px solid rgba(136, 164, 194, 0.34);
+            box-shadow: 0 12px 26px rgba(14, 36, 61, 0.08);
+            backdrop-filter: blur(18px);
+            transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+        }}
+        .insight-card::before {{
+            content: "";
+            position: absolute;
+            width: 140px;
+            height: 140px;
+            right: -48px;
+            bottom: -56px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--insight-accent) 0%, transparent 68%);
+            opacity: 0.16;
+            pointer-events: none;
+        }}
+        .insight-card:hover {{
+            transform: translateY(-3px);
+            box-shadow: 0 20px 34px rgba(14, 36, 61, 0.12);
+        }}
+        .insight-card__header {{
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }}
+        .insight-card__eyebrow {{
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 0.7rem;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--insight-accent);
+            background: rgba(255, 255, 255, 0.76);
+            border: 1px solid rgba(255, 255, 255, 0.56);
+        }}
+        .insight-card__icon {{
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            font-size: 1.2rem;
+            color: #ffffff;
+            background: linear-gradient(135deg, var(--insight-accent) 0%, {theme['accent_alt']} 100%);
+            box-shadow: 0 14px 22px rgba(18, 35, 63, 0.16);
+        }}
+        .insight-card__label {{
+            position: relative;
+            z-index: 1;
+            margin-top: 14px;
+            font-size: 0.9rem;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--ink);
+        }}
+        .insight-card__value {{
+            position: relative;
+            z-index: 1;
+            margin-top: 12px;
+            font-family: 'DM Serif Display', serif;
+            font-size: 2rem;
+            line-height: 1.05;
+            color: var(--ink);
+        }}
+        .insight-card__value--long {{
+            font-family: 'Manrope', sans-serif;
+            font-size: 1.15rem;
+            line-height: 1.4;
+            font-weight: 800;
+        }}
+        .insight-card__hint {{
+            position: relative;
+            z-index: 1;
+            margin-top: 12px;
+            font-size: 0.88rem;
+            line-height: 1.48;
+            color: var(--muted);
+        }}
+        .table-kicker {{
+            margin: 14px 0 8px;
+            font-size: 0.74rem;
+            font-weight: 800;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--accent-alt);
+        }}
+        .student-identity {{
+            --identity-accent: {theme['accent']};
+            position: relative;
+            overflow: hidden;
+            min-height: 168px;
+            padding: 20px 20px 18px;
+            border-radius: 22px;
+            background:
+                radial-gradient(circle at 88% 16%, rgba(255, 255, 255, 0.88) 0%, transparent 24%),
+                linear-gradient(160deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 250, 255, 0.92) 100%);
+            border: 1px solid rgba(136, 164, 194, 0.34);
+            box-shadow: 0 16px 30px rgba(14, 36, 61, 0.08);
+            backdrop-filter: blur(18px);
+        }}
+        .student-identity::before {{
+            content: "";
+            position: absolute;
+            width: 210px;
+            height: 210px;
+            right: -82px;
+            top: -92px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--identity-accent) 0%, transparent 70%);
+            opacity: 0.16;
+            pointer-events: none;
+        }}
+        .student-identity__top {{
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 14px;
+        }}
+        .student-identity__kicker {{
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 11px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--identity-accent);
+            background: rgba(255, 255, 255, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.58);
+        }}
+        .student-identity__icon {{
+            width: 54px;
+            height: 54px;
+            border-radius: 17px;
+            display: grid;
+            place-items: center;
+            font-size: 1.45rem;
+            color: #ffffff;
+            background: linear-gradient(135deg, var(--identity-accent) 0%, {theme['accent_alt']} 100%);
+            box-shadow: 0 16px 26px rgba(18, 35, 63, 0.18);
+            flex-shrink: 0;
+        }}
+        .student-identity__name {{
+            position: relative;
+            z-index: 1;
+            margin-top: 14px;
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.7rem;
+            line-height: 1.15;
+            color: var(--ink);
+        }}
+        .student-identity__meta {{
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 16px;
+        }}
+        .student-identity__pill {{
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 12px;
+            border-radius: 14px;
+            font-size: 0.84rem;
+            font-weight: 700;
+            color: var(--ink);
+            background: rgba(255, 255, 255, 0.76);
+            border: 1px solid rgba(255, 255, 255, 0.56);
+            box-shadow: 0 10px 20px rgba(18, 35, 63, 0.06);
+        }}
+        .report-card {{
+            --report-accent: {theme['accent']};
+            position: relative;
+            overflow: hidden;
+            min-height: 188px;
+            padding: 20px 20px 18px;
+            border-radius: 22px;
+            background:
+                radial-gradient(circle at 90% 14%, rgba(255, 255, 255, 0.88) 0%, transparent 24%),
+                linear-gradient(160deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 251, 255, 0.94) 100%);
+            border: 1px solid rgba(136, 164, 194, 0.34);
+            box-shadow: 0 14px 28px rgba(14, 36, 61, 0.08);
+            backdrop-filter: blur(18px);
+            transition: transform 0.22s ease, box-shadow 0.22s ease;
+        }}
+        .report-card::before {{
+            content: "";
+            position: absolute;
+            width: 168px;
+            height: 168px;
+            right: -54px;
+            bottom: -70px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--report-accent) 0%, transparent 70%);
+            opacity: 0.16;
+            pointer-events: none;
+        }}
+        .report-card:hover {{
+            transform: translateY(-3px);
+            box-shadow: 0 20px 36px rgba(14, 36, 61, 0.12);
+        }}
+        .report-card__header {{
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }}
+        .report-card__eyebrow {{
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 0.7rem;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--report-accent);
+            background: rgba(255, 255, 255, 0.76);
+            border: 1px solid rgba(255, 255, 255, 0.58);
+        }}
+        .report-card__icon {{
+            width: 46px;
+            height: 46px;
+            border-radius: 15px;
+            display: grid;
+            place-items: center;
+            font-size: 1.25rem;
+            color: #ffffff;
+            background: linear-gradient(135deg, var(--report-accent) 0%, {theme['accent_alt']} 100%);
+            box-shadow: 0 14px 24px rgba(18, 35, 63, 0.16);
+        }}
+        .report-card__title {{
+            position: relative;
+            z-index: 1;
+            margin-top: 14px;
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.28rem;
+            line-height: 1.15;
+            color: var(--ink);
+        }}
+        .report-card__text {{
+            position: relative;
+            z-index: 1;
+            margin-top: 10px;
+            font-size: 0.92rem;
+            line-height: 1.6;
+            color: var(--muted);
+        }}
+        .report-card__meta {{
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 16px;
+        }}
+        .report-card__pill {{
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 11px;
+            border-radius: 13px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--ink);
+            background: rgba(255, 255, 255, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.58);
+            box-shadow: 0 10px 20px rgba(18, 35, 63, 0.06);
+        }}
+        .report-launchpad {{
+            --launch-accent: {theme['accent']};
+            position: relative;
+            overflow: hidden;
+            margin-top: 16px;
+            padding: 22px 22px 18px;
+            border-radius: 24px;
+            background:
+                radial-gradient(circle at 90% 14%, rgba(255, 255, 255, 0.88) 0%, transparent 24%),
+                linear-gradient(160deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 250, 255, 0.92) 58%, rgba(255, 248, 241, 0.9) 100%);
+            border: 1px solid rgba(136, 164, 194, 0.34);
+            box-shadow: 0 16px 30px rgba(14, 36, 61, 0.08);
+            backdrop-filter: blur(18px);
+        }}
+        .report-launchpad::before {{
+            content: "";
+            position: absolute;
+            width: 220px;
+            height: 220px;
+            right: -88px;
+            top: -92px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--launch-accent) 0%, transparent 70%);
+            opacity: 0.16;
+            pointer-events: none;
+        }}
+        .report-launchpad__title {{
+            position: relative;
+            z-index: 1;
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.6rem;
+            line-height: 1.12;
+            color: var(--ink);
+        }}
+        .report-launchpad__text {{
+            position: relative;
+            z-index: 1;
+            margin-top: 10px;
+            max-width: 840px;
+            font-size: 0.95rem;
+            line-height: 1.64;
+            color: var(--muted);
+        }}
+        .report-launchpad__meta {{
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 16px;
         }}
         .sidebar-brand,
         .hero-wrap,
         .workspace-card,
         .mini-note,
-        .topper-card,
         [data-testid="stMetric"],
-        .summary-tile,
         .stTabs [data-baseweb="tab-list"],
         details[data-testid="stExpander"],
         div[data-testid="stAlert"],
@@ -1305,6 +2052,29 @@ def apply_theme(theme):
             }}
             .hero-title {{
                 font-size: 1.9rem;
+            }}
+            .tab-hero,
+            .student-identity,
+            .insight-card,
+            .report-card,
+            .report-launchpad {{
+                padding: 18px 16px 16px;
+                border-radius: 20px;
+            }}
+            .tab-hero__header,
+            .student-identity__top {{
+                flex-direction: column;
+                align-items: flex-start;
+            }}
+            .tab-hero__icon,
+            .student-identity__icon {{
+                width: 54px;
+                height: 54px;
+                border-radius: 18px;
+            }}
+            .tab-hero__title,
+            .student-identity__name {{
+                font-size: 1.45rem;
             }}
         }}
         </style>
@@ -1665,7 +2435,6 @@ def upload_screen():
                     <span>Same logic</span>
                 </div>
             </div>
-            <div class="mini-note">A bolder background and simpler layout keep the page professional without making the upload screen feel crowded.</div>
             """,
             unsafe_allow_html=True,
         )
@@ -1699,12 +2468,6 @@ def upload_screen():
             "Upload semester result Excel file",
             type=["xlsx"],
             label_visibility="collapsed",
-        )
-        st.markdown(
-            """
-            <div class="mini-note">Best results come from a clean semester workbook with at least one ready-to-analyze sheet. You can replace the file later without logging out.</div>
-            """,
-            unsafe_allow_html=True,
         )
 
     if uploaded_file is None:
@@ -2177,6 +2940,13 @@ def render_term_tabs(ctx, theme, risk_threshold):
 
     key_suffix = term_key if term_key else "all"
 
+    def format_subject_label(name, code=""):
+        clean_name = str(name).strip()
+        clean_code = str(code).strip()
+        if clean_code and clean_code.lower() not in {"nan", "none", "-"}:
+            return f"{clean_name} ({clean_code})"
+        return clean_name
+
     if not excluded_df.empty:
         st.warning(f"{len(excluded_df)} students have no {term_label} data and were excluded from this term.")
         with st.expander("View excluded students", expanded=False):
@@ -2191,28 +2961,63 @@ def render_term_tabs(ctx, theme, risk_threshold):
         distinction = 0
         at_risk = 0
     summary_cards = [
-        ("total", "Total Students", overview.get("total_students", 0), "Open the full cohort list.", theme["accent"]),
-        ("passed", "Passed", overview.get("passed", 0), "Students who cleared all subjects.", theme["success"]),
-        ("failed", "Failed", overview.get("failed", 0), "Students who need quick attention.", theme["danger"]),
+        {
+            "filter_key": "total",
+            "title": "Total Students",
+            "value": overview.get("total_students", 0),
+            "hint": "Open the full cohort list.",
+            "accent": theme["accent"],
+            "icon": "&#128101;",
+            "eyebrow": "Cohort View",
+            "button_label": "Open Cohort",
+        },
+        {
+            "filter_key": "passed",
+            "title": "Passed",
+            "value": overview.get("passed", 0),
+            "hint": "Students who cleared all subjects.",
+            "accent": theme["success"],
+            "icon": "&#10003;",
+            "eyebrow": "Healthy Flow",
+            "button_label": "Open Passed List",
+        },
+        {
+            "filter_key": "failed",
+            "title": "Failed",
+            "value": overview.get("failed", 0),
+            "hint": "Students who need quick attention.",
+            "accent": theme["danger"],
+            "icon": "&#9888;",
+            "eyebrow": "Needs Focus",
+            "button_label": "Open Failed List",
+        },
     ]
 
     st.markdown("<div class='section-kicker'>Quick Cohort Drill Down</div>", unsafe_allow_html=True)
     card_cols = st.columns(3)
-    for col, (filter_key, title, value, hint, accent_color) in zip(card_cols, summary_cards):
+    for col, card in zip(card_cols, summary_cards):
+        filter_key = card["filter_key"]
         active = selected_summary_filter == filter_key
         with col:
             st.markdown(
                 f"""
-                <div class="summary-tile {'summary-tile-active' if active else ''}" style="--summary-accent: {accent_color};">
-                    <div class="summary-tile__label">{title}</div>
-                    <div class="summary-tile__value">{value}</div>
-                    <div class="summary-tile__hint">{hint}</div>
+                <div class="summary-tile {'summary-tile-active' if active else ''}" style="--summary-accent: {card['accent']};">
+                    <div class="summary-tile__header">
+                        <div class="summary-tile__eyebrow">{card['eyebrow']}</div>
+                        <div class="summary-tile__icon">{card['icon']}</div>
+                    </div>
+                    <div class="summary-tile__label">{escape(card['title'])}</div>
+                    <div class="summary-tile__value">{card['value']}</div>
+                    <div class="summary-tile__footer">
+                        <div class="summary-tile__hint">{escape(card['hint'])}</div>
+                        <div class="summary-tile__signal">{'&#10003; Active View' if active else '&#10148; Drill Down'}</div>
+                    </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
             if st.button(
-                "Viewing Students" if active else f"Show {title}",
+                "Viewing Students" if active else card["button_label"],
                 key=f"summary_drill_{filter_key}_{key_suffix}",
                 use_container_width=True,
                 type="primary" if active else "secondary",
@@ -2220,10 +3025,46 @@ def render_term_tabs(ctx, theme, risk_threshold):
                 st.session_state[summary_filter_state_key] = filter_key
                 st.rerun()
 
-    k4, k5, k6 = st.columns(3)
-    k4.metric("Average SGPA", "-" if not sgpa_col else avg_sgpa)
-    k5.metric("Pass %", f"{overview.get('pass_percent', 0.0)}%")
-    k6.metric("Distinction", distinction)
+    cohort_stats = [
+        {
+            "label": "Average SGPA",
+            "value": "-" if not sgpa_col else f"{float(avg_sgpa):.2f}",
+            "hint": "Academic momentum across the selected cohort.",
+            "accent": theme["accent_alt"],
+            "icon": "&#128200;",
+        },
+        {
+            "label": "Pass %",
+            "value": f"{float(overview.get('pass_percent', 0.0)):.2f}%",
+            "hint": "Share of students clearing the current term view.",
+            "accent": theme["success"],
+            "icon": "&#10024;",
+        },
+        {
+            "label": "Distinction",
+            "value": str(distinction),
+            "hint": "Students currently performing at distinction level.",
+            "accent": theme["accent"],
+            "icon": "&#127942;",
+        },
+    ]
+
+    stat_cols = st.columns(3)
+    for col, stat in zip(stat_cols, cohort_stats):
+        with col:
+            st.markdown(
+                f"""
+                <div class="cohort-stat" style="--stat-accent: {stat['accent']};">
+                    <div class="cohort-stat__row">
+                        <div class="cohort-stat__label">{escape(stat['label'])}</div>
+                        <div class="cohort-stat__icon">{stat['icon']}</div>
+                    </div>
+                    <div class="cohort-stat__value">{stat['value']}</div>
+                    <div class="cohort-stat__hint">{escape(stat['hint'])}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
     st.markdown(
         f"<div class='mini-note'>Sheet: <strong>{sheet_name}</strong> | Term: <strong>{term_label}</strong> | "
         f"At-risk threshold: <strong>{risk_threshold:.1f}</strong> | At-risk students: <strong>{at_risk}</strong></div>",
@@ -2287,28 +3128,73 @@ def render_term_tabs(ctx, theme, risk_threshold):
                 else:
                     donut_chart(d, "Range", "Students", "SGPA Distribution", theme["palette"])
 
+        st.markdown("<div class='section-kicker'>Podium Highlights</div>", unsafe_allow_html=True)
         st.markdown("### Top Students")
         if toppers.empty:
             st.info("No topper data available.")
         else:
+            topper_styles = {
+                1: {"accent": "#d4a437", "icon": "&#127942;", "eyebrow": "Cohort Leader", "grade_icon": "&#10024;"},
+                2: {"accent": "#8092ae", "icon": "&#129352;", "eyebrow": "Runner-Up", "grade_icon": "&#9679;"},
+                3: {"accent": "#b7763c", "icon": "&#129353;", "eyebrow": "Top Podium", "grade_icon": "&#9679;"},
+            }
             for start in range(0, len(toppers), 3):
                 chunk = toppers.iloc[start:start + 3]
                 cols = st.columns(len(chunk))
                 for idx, (_, row) in enumerate(chunk.iterrows()):
                     rank = start + idx + 1
+                    topper_style = topper_styles.get(
+                        rank,
+                        {
+                            "accent": theme["palette"][(rank - 1) % len(theme["palette"])],
+                            "icon": "&#11088;",
+                            "eyebrow": "Merit Circle",
+                            "grade_icon": "&#9679;",
+                        },
+                    )
                     sgpa_val = "-"
                     if sgpa_col and sgpa_col in toppers.columns:
                         raw_val = row[sgpa_col]
-                        sgpa_val = "-" if pd.isna(raw_val) else raw_val
+                        sgpa_val = "-" if pd.isna(raw_val) else f"{float(raw_val):.2f}"
+                    student_name = escape(str(row[engine.name_col]))
+                    prn_value = escape(str(row[engine.roll_col]))
+                    grade_value = escape(str(row.get("grade", "-")))
+                    term_value = escape(str(term_label))
                     with cols[idx]:
                         st.markdown(
                             f"""
-                            <div class="topper-card" style="border-top: 4px solid {theme['palette'][rank % len(theme['palette'])]};">
-                                <p class="topper-rank">Rank {rank}</p>
-                                <p class="topper-name">{row[engine.name_col]}</p>
-                                <div>PRN: {row[engine.roll_col]}</div>
-                                <div>SGPA: {sgpa_val}</div>
-                                <div>Grade: {row['grade']}</div>
+                            <div class="topper-card" style="--topper-accent: {topper_style['accent']};">
+                                <div class="topper-card__header">
+                                    <div class="topper-card__rankblock">
+                                        <div class="topper-card__medal">{topper_style['icon']}</div>
+                                        <div>
+                                            <div class="topper-card__eyebrow">{topper_style['eyebrow']}</div>
+                                            <p class="topper-rank">Rank {rank}</p>
+                                        </div>
+                                    </div>
+                                    <div class="topper-card__score">
+                                        <div class="topper-card__score-label">SGPA</div>
+                                        <div class="topper-card__score-value">{sgpa_val}</div>
+                                    </div>
+                                </div>
+                                <p class="topper-name">{student_name}</p>
+                                <div class="topper-card__meta">
+                                    <div class="topper-card__meta-item">
+                                        <div class="topper-card__meta-label">PRN</div>
+                                        <div class="topper-card__meta-value">{prn_value}</div>
+                                    </div>
+                                    <div class="topper-card__meta-item">
+                                        <div class="topper-card__meta-label">Term Focus</div>
+                                        <div class="topper-card__meta-value">{term_value}</div>
+                                    </div>
+                                    <div class="topper-card__meta-item topper-card__meta--full">
+                                        <div>
+                                            <div class="topper-card__meta-label">Recognition</div>
+                                            <div class="topper-card__meta-value">{topper_style['eyebrow']}</div>
+                                        </div>
+                                        <div class="topper-card__grade">{topper_style['grade_icon']} Grade {grade_value}</div>
+                                    </div>
+                                </div>
                             </div>
                             """,
                             unsafe_allow_html=True,
@@ -2330,6 +3216,34 @@ def render_term_tabs(ctx, theme, risk_threshold):
             st.warning("No subject-level pass/fail columns detected in this file.")
         else:
             subject_work = subject_df.copy()
+            best = subject_work.loc[subject_work["pass_percent"].idxmax()]
+            hard = subject_work.loc[subject_work["pass_percent"].idxmin()]
+            best_label = format_subject_label(best["subject_name"], best["course_code"])
+            hard_label = format_subject_label(hard["subject_name"], hard["course_code"])
+
+            st.markdown(
+                f"""
+                <div class="tab-hero" style="--hero-accent: {theme['accent_alt']};">
+                    <div class="tab-hero__header">
+                        <div>
+                            <div class="tab-hero__kicker">&#128300; Subject Intelligence</div>
+                            <div class="tab-hero__title">Subject Health Radar</div>
+                            <div class="tab-hero__text">
+                                Surface the strongest outcomes, isolate fragile papers, and compare failure pressure against pass momentum for {escape(term_label)}.
+                            </div>
+                        </div>
+                        <div class="tab-hero__icon">&#128200;</div>
+                    </div>
+                    <div class="tab-hero__chips">
+                        <div class="tab-hero__chip">&#128214; {len(subject_work)} subjects tracked</div>
+                        <div class="tab-hero__chip">&#11088; Best performer: {escape(best_label)}</div>
+                        <div class="tab-hero__chip">&#9888; Pressure point: {escape(hard_label)}</div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
             h1, h2 = st.columns([2, 1])
             with h1:
                 st.caption("Showing all detected subjects.")
@@ -2349,26 +3263,83 @@ def render_term_tabs(ctx, theme, risk_threshold):
 
             hard = subject_work.loc[subject_work["pass_percent"].idxmin()]
             best = subject_work.loc[subject_work["pass_percent"].idxmax()]
-            s1, s2, s3 = st.columns(3)
-            s1.metric("Subjects in View", len(subject_work))
-            s2.metric("Average Subject Pass %", f"{float(subject_work['pass_percent'].mean()):.2f}%")
-            s3.metric("Needs Improvement", f"{hard['subject_name']} ({hard['course_code']})")
+            best_label = format_subject_label(best["subject_name"], best["course_code"])
+            hard_label = format_subject_label(hard["subject_name"], hard["course_code"])
+            subject_cards = [
+                {
+                    "eyebrow": "Coverage",
+                    "label": "Subjects in View",
+                    "value": str(len(subject_work)),
+                    "hint": "Current number of evaluated subjects in this term view.",
+                    "accent": theme["accent"],
+                    "icon": "&#128218;",
+                    "long": False,
+                },
+                {
+                    "eyebrow": "Signal",
+                    "label": "Average Subject Pass %",
+                    "value": f"{float(subject_work['pass_percent'].mean()):.2f}%",
+                    "hint": "Average pass percentage across all detected subjects.",
+                    "accent": theme["success"],
+                    "icon": "&#10024;",
+                    "long": False,
+                },
+                {
+                    "eyebrow": "Top Performer",
+                    "label": "Best Pass %",
+                    "value": best_label,
+                    "hint": f"{float(best['pass_percent']):.2f}% pass rate in the current view.",
+                    "accent": theme["palette"][1],
+                    "icon": "&#127942;",
+                    "long": True,
+                },
+                {
+                    "eyebrow": "Pressure Point",
+                    "label": "Needs Improvement",
+                    "value": hard_label,
+                    "hint": f"{float(hard['pass_percent']):.2f}% pass rate needs intervention attention.",
+                    "accent": theme["danger"],
+                    "icon": "&#9888;",
+                    "long": True,
+                },
+            ]
+
+            subject_stat_cols = st.columns(4)
+            for col, card in zip(subject_stat_cols, subject_cards):
+                with col:
+                    st.markdown(
+                        f"""
+                        <div class="insight-card" style="--insight-accent: {card['accent']};">
+                            <div class="insight-card__header">
+                                <div class="insight-card__eyebrow">{card['eyebrow']}</div>
+                                <div class="insight-card__icon">{card['icon']}</div>
+                            </div>
+                            <div class="insight-card__label">{escape(card['label'])}</div>
+                            <div class="insight-card__value {'insight-card__value--long' if card['long'] else ''}">{escape(card['value'])}</div>
+                            <div class="insight-card__hint">{escape(card['hint'])}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
             c1, c2 = st.columns(2)
             with c1:
+                st.markdown("<div class='table-kicker'>Failure Pressure Map</div>", unsafe_allow_html=True)
                 failed_bar(subject_work, theme)
             with c2:
+                st.markdown("<div class='table-kicker'>Pass Rate Skyline</div>", unsafe_allow_html=True)
                 pass_percent_bar(subject_work, theme)
 
             st.markdown(
-                f"<span class='chip'>Best Pass %: {best['subject_name']} ({best['course_code']}) - {best['pass_percent']}%</span>",
+                f"<span class='chip'>Best Pass %: {escape(best_label)} - {best['pass_percent']}%</span>",
                 unsafe_allow_html=True,
             )
             st.markdown(
-                f"<span class='chip'>Needs Attention: {hard['subject_name']} ({hard['course_code']}) - {hard['pass_percent']}%</span>",
+                f"<span class='chip'>Needs Attention: {escape(hard_label)} - {hard['pass_percent']}%</span>",
                 unsafe_allow_html=True,
             )
 
+            st.markdown("<div class='table-kicker'>Subject Performance Ledger</div>", unsafe_allow_html=True)
             table = subject_work[
                 ["subject_name", "course_code", "appeared", "failed", "pass_percent", "topper_name", "topper_prn", "topper_marks"]
             ].copy()
@@ -2391,19 +3362,62 @@ def render_term_tabs(ctx, theme, risk_threshold):
         if grade_df.empty:
             st.warning("No grade distribution could be derived from this file.")
         else:
-            g1, g2, g3, g4, g5, g6 = st.columns(6)
-            g1.metric("Total Students", grade_summary.get("total_students", 0))
-            g2.metric("Distinction", grade_summary.get("distinction", 0))
-            g3.metric("First Class", grade_summary.get("first_class", 0))
-            g4.metric("Second Class", grade_summary.get("second_class", 0))
-            g5.metric("Passed", grade_summary.get("passed", 0))
-            g6.metric("ATKT", grade_summary.get("failed", 0))
+            st.markdown(
+                f"""
+                <div class="tab-hero" style="--hero-accent: {theme['palette'][1]};">
+                    <div class="tab-hero__header">
+                        <div>
+                            <div class="tab-hero__kicker">&#127891; Grade Distribution</div>
+                            <div class="tab-hero__title">Academic Standing Lens</div>
+                            <div class="tab-hero__text">
+                                Read the class distribution at a glance, compare progression bands, and spot how much of the cohort is moving cleanly versus through ATKT.
+                            </div>
+                        </div>
+                        <div class="tab-hero__icon">&#127979;</div>
+                    </div>
+                    <div class="tab-hero__chips">
+                        <div class="tab-hero__chip">&#127942; Distinction: {grade_summary.get('distinction', 0)}</div>
+                        <div class="tab-hero__chip">&#9989; Pass %: {float(grade_summary.get('pass_percent', 0.0)):.2f}%</div>
+                        <div class="tab-hero__chip">&#10145; Pass With ATKT: {float(grade_summary.get('pass_with_atkt', 0.0)):.2f}%</div>
+                        <div class="tab-hero__chip">&#9888; Overall Failed: {grade_summary.get('overall_failed', 0)}</div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-            g7, g8, g9, g10 = st.columns(4)
-            g7.metric("Failed (Overall)", grade_summary.get("overall_failed", 0))
-            g8.metric("Pass %", f"{float(grade_summary.get('pass_percent', 0.0)):.2f}%")
-            g9.metric("Pass % With ATKT", f"{float(grade_summary.get('pass_with_atkt', 0.0)):.2f}%")
-            g10.metric("Total Appeared", grade_summary.get("total_students", 0))
+            grade_cards = [
+                {"eyebrow": "Base", "label": "Total Students", "value": str(grade_summary.get("total_students", 0)), "hint": "Total learners counted in the current term snapshot.", "accent": theme["accent"], "icon": "&#128101;"},
+                {"eyebrow": "Top Band", "label": "Distinction", "value": str(grade_summary.get("distinction", 0)), "hint": "Students currently performing at distinction level.", "accent": theme["palette"][1], "icon": "&#127942;"},
+                {"eyebrow": "Class Band", "label": "First Class", "value": str(grade_summary.get("first_class", 0)), "hint": "Students holding strong first-class performance.", "accent": theme["success"], "icon": "&#11088;"},
+                {"eyebrow": "Class Band", "label": "Second Class", "value": str(grade_summary.get("second_class", 0)), "hint": "Students in the stable second-class zone.", "accent": theme["accent_alt"], "icon": "&#128204;"},
+                {"eyebrow": "Outcome", "label": "Passed", "value": str(grade_summary.get("passed", 0)), "hint": "Students who cleared the term within the current result logic.", "accent": theme["success"], "icon": "&#9989;"},
+                {"eyebrow": "Watchlist", "label": "ATKT", "value": str(grade_summary.get("failed", 0)), "hint": "Students progressing with carry-over subjects.", "accent": theme["danger"], "icon": "&#9888;"},
+                {"eyebrow": "Risk", "label": "Failed (Overall)", "value": str(grade_summary.get("overall_failed", 0)), "hint": "Students below the overall SGPA passing threshold.", "accent": theme["danger"], "icon": "&#9940;"},
+                {"eyebrow": "Momentum", "label": "Pass %", "value": f"{float(grade_summary.get('pass_percent', 0.0)):.2f}%", "hint": "Pure pass percentage without ATKT cushioning.", "accent": theme["accent"], "icon": "&#128200;"},
+                {"eyebrow": "Progression", "label": "Pass % With ATKT", "value": f"{float(grade_summary.get('pass_with_atkt', 0.0)):.2f}%", "hint": "Effective progression rate when ATKT is included.", "accent": theme["palette"][4], "icon": "&#10145;"},
+                {"eyebrow": "Attendance", "label": "Total Appeared", "value": str(grade_summary.get("total_students", 0)), "hint": "Students considered as appeared in the grade snapshot.", "accent": theme["palette"][5], "icon": "&#128221;"},
+            ]
+
+            for start in range(0, len(grade_cards), 5):
+                chunk = grade_cards[start:start + 5]
+                cols = st.columns(len(chunk))
+                for col, card in zip(cols, chunk):
+                    with col:
+                        st.markdown(
+                            f"""
+                            <div class="insight-card" style="--insight-accent: {card['accent']};">
+                                <div class="insight-card__header">
+                                    <div class="insight-card__eyebrow">{card['eyebrow']}</div>
+                                    <div class="insight-card__icon">{card['icon']}</div>
+                                </div>
+                                <div class="insight-card__label">{escape(card['label'])}</div>
+                                <div class="insight-card__value">{card['value']}</div>
+                                <div class="insight-card__hint">{escape(card['hint'])}</div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
 
             display_df = grade_df.copy()
             if "before_remedial_result" in display_df.columns:
@@ -2434,15 +3448,40 @@ def render_term_tabs(ctx, theme, risk_threshold):
                 },
                 inplace=True,
             )
+            st.markdown("<div class='table-kicker'>Grade Distribution Ledger</div>", unsafe_allow_html=True)
             st.dataframe(display_df, use_container_width=True)
 
     with student_tab:
         st.markdown("<div class='section-kicker'>Student Drill Down</div>", unsafe_allow_html=True)
-        if selected_summary_filter:
-            st.caption(
-                f"Explorer synced to {SUMMARY_FILTER_LABELS[selected_summary_filter].lower()}. "
-                "Sidebar status filters are bypassed while this cohort view is active."
-            )
+        roster_focus = SUMMARY_FILTER_LABELS[selected_summary_filter] if selected_summary_filter else "Current Visible Roster"
+        roster_passed = int((student_view_df["Status"] == "Passed").sum()) if not student_view_df.empty else 0
+        roster_failed = int((student_view_df["Status"] == "Failed").sum()) if not student_view_df.empty else 0
+
+        st.markdown(
+            f"""
+            <div class="tab-hero" style="--hero-accent: {theme['accent']};">
+                <div class="tab-hero__header">
+                    <div>
+                        <div class="tab-hero__kicker">&#128269; Student Explorer</div>
+                        <div class="tab-hero__title">Roster-to-Profile Deep Dive</div>
+                        <div class="tab-hero__text">
+                            Move from cohort scanning to individual diagnostics, inspect failed subjects quickly, and read every student's marks trail from one focused workspace.
+                        </div>
+                    </div>
+                    <div class="tab-hero__icon">&#128100;</div>
+                </div>
+                <div class="tab-hero__chips">
+                    <div class="tab-hero__chip">&#128101; Students in view: {len(student_view_df)}</div>
+                    <div class="tab-hero__chip">&#127919; Focus: {escape(roster_focus)}</div>
+                    <div class="tab-hero__chip">&#9989; Passed: {roster_passed}</div>
+                    <div class="tab-hero__chip">&#9888; Failed: {roster_failed}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown("<div class='table-kicker'>Explorer Roster</div>", unsafe_allow_html=True)
         st.dataframe(student_view_df, use_container_width=True)
         if student_view_df.empty:
             if selected_summary_filter:
@@ -2455,21 +3494,98 @@ def render_term_tabs(ctx, theme, risk_threshold):
                 f"{row['Student Name']} ({row['PRN No']})": row["PRN No"]
                 for _, row in student_view_df.drop_duplicates(subset=["PRN No"]).iterrows()
             }
+            st.markdown("<div class='table-kicker'>Profile Selection</div>", unsafe_allow_html=True)
             label = st.selectbox("Select Student", list(option_map.keys()), key=f"student_{key_suffix}")
             prn = option_map[label]
             row = student_view_df[student_view_df["PRN No"] == prn].iloc[0]
-            p1, p2, p3 = st.columns(3)
-            p1.metric("Student", row["Student Name"])
-            p2.metric("Status", row["Status"])
-            p3.metric("SGPA", "-" if pd.isna(row["SGPA"]) else row["SGPA"])
+            student_name = escape(str(row["Student Name"]))
+            prn_value = escape(str(row["PRN No"]))
+            student_status = escape(str(row["Status"]))
+            student_grade = escape(str(row.get("Grade", "-")))
+            sgpa_display = "-" if pd.isna(row["SGPA"]) else f"{float(row['SGPA']):.2f}"
+            failed_subjects_display = str(row["Failed Subjects"]).strip()
+            failed_subject_count = 0 if failed_subjects_display in {"", "-"} else len([item for item in failed_subjects_display.split(",") if item.strip()])
+            identity_accent = theme["success"] if student_status == "Passed" else theme["danger"]
+
+            st.markdown(
+                f"""
+                <div class="student-identity" style="--identity-accent: {identity_accent};">
+                    <div class="student-identity__top">
+                        <div>
+                            <div class="student-identity__kicker">&#128104;&#8205;&#127891; Student Focus</div>
+                            <div class="student-identity__name">{student_name}</div>
+                        </div>
+                        <div class="student-identity__icon">&#128100;</div>
+                    </div>
+                    <div class="student-identity__meta">
+                        <div class="student-identity__pill">&#128196; PRN: {prn_value}</div>
+                        <div class="student-identity__pill">&#127919; Status: {student_status}</div>
+                        <div class="student-identity__pill">&#9888; Flagged subjects: {failed_subject_count}</div>
+                        <div class="student-identity__pill">&#11088; Grade: {student_grade}</div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            profile_cards = [
+                {"eyebrow": "State", "label": "Status", "value": student_status, "hint": "Overall student result state in the current term view.", "accent": identity_accent, "icon": "&#127919;", "long": False},
+                {"eyebrow": "Score", "label": "SGPA", "value": sgpa_display, "hint": "Semester performance score used for the student overview.", "accent": theme["accent"], "icon": "&#128200;", "long": False},
+                {"eyebrow": "Band", "label": "Grade", "value": student_grade, "hint": "Derived or detected academic grade for the selected student.", "accent": theme["palette"][1], "icon": "&#127942;", "long": False},
+                {"eyebrow": "Watchlist", "label": "Flagged Subjects", "value": str(failed_subject_count), "hint": "Subjects currently marked failed or absent for this student.", "accent": theme["danger"] if failed_subject_count else theme["success"], "icon": "&#9888;" if failed_subject_count else "&#9989;", "long": False},
+            ]
+
+            profile_cols = st.columns(4)
+            for col, card in zip(profile_cols, profile_cards):
+                with col:
+                    st.markdown(
+                        f"""
+                        <div class="insight-card" style="--insight-accent: {card['accent']};">
+                            <div class="insight-card__header">
+                                <div class="insight-card__eyebrow">{card['eyebrow']}</div>
+                                <div class="insight-card__icon">{card['icon']}</div>
+                            </div>
+                            <div class="insight-card__label">{escape(card['label'])}</div>
+                            <div class="insight-card__value">{escape(card['value'])}</div>
+                            <div class="insight-card__hint">{escape(card['hint'])}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
             detail_df = engine.get_student_subject_report(prn, term_key)
             if detail_df.empty:
                 st.info("No subject-level details found for this student.")
             else:
+                detail_results = detail_df["result"].astype(str).str.upper()
+                detail_passed = int(detail_results.eq("PASS").sum())
+                detail_flagged = int(detail_results.isin(["FAIL", "ABSENT"]).sum())
+                st.markdown(
+                    f"""
+                    <div class="tab-hero" style="--hero-accent: {identity_accent};">
+                        <div class="tab-hero__header">
+                            <div>
+                                <div class="tab-hero__kicker">&#128221; Subject Trail</div>
+                                <div class="tab-hero__title">Individual Marks Breakdown</div>
+                                <div class="tab-hero__text">
+                                    Review the selected student's subject-by-subject outcomes, course codes, and marks captured in the active term.
+                                </div>
+                            </div>
+                            <div class="tab-hero__icon">&#128203;</div>
+                        </div>
+                        <div class="tab-hero__chips">
+                            <div class="tab-hero__chip">&#128218; Subjects listed: {len(detail_df)}</div>
+                            <div class="tab-hero__chip">&#9989; Passed papers: {detail_passed}</div>
+                            <div class="tab-hero__chip">&#9888; Flagged papers: {detail_flagged}</div>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
                 details = detail_df[["subject_name", "course_code", "result", "marks"]].copy()
                 details.columns = ["Subject Name", "Course Code", "Result", "Marks"]
                 details["Marks"] = details["Marks"].map(lambda v: "-" if pd.isna(v) else f"{float(v):.2f}")
+                st.markdown("<div class='table-kicker'>Student Subject Ledger</div>", unsafe_allow_html=True)
                 st.dataframe(details, use_container_width=True)
 
     with history_tab:
@@ -2477,47 +3593,178 @@ def render_term_tabs(ctx, theme, risk_threshold):
 
     with report_tab:
         st.markdown("<div class='section-kicker'>Exports and Reporting</div>", unsafe_allow_html=True)
-        st.write("Download structured outputs or full report package.")
+        report_semester = term_label if term_key else st.session_state.get("semester_name", "")
+        report_slug = re.sub(r"[^A-Za-z0-9]+", "_", report_semester).strip("_") or key_suffix
+        excel_output_file = f"Final_Result_Report_{report_slug}.xlsx"
+        bundle_data = build_zip(insights_df, insight_report, subject_df, student_view_df, toppers)
 
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.download_button(
-                "Download Insights CSV",
-                data=insights_df.to_csv(index=False).encode("utf-8"),
-                file_name=f"insights_table_{key_suffix}.csv",
-                mime="text/csv",
-                key=f"insights_csv_{key_suffix}",
-            )
-        with c2:
-            st.download_button(
-                "Download Insights TXT",
-                data=insight_report.encode("utf-8"),
-                file_name=f"insights_report_{key_suffix}.txt",
-                mime="text/plain",
-                key=f"insights_txt_{key_suffix}",
-            )
-        with c3:
-            st.download_button(
-                "Download Subject Analysis CSV",
-                data=subject_df.to_csv(index=False).encode("utf-8"),
-                file_name=f"subject_analysis_{key_suffix}.csv",
-                mime="text/csv",
-                key=f"subject_csv_{key_suffix}",
-            )
-
-        st.download_button(
-            "Download Full Analysis Bundle (ZIP)",
-            data=build_zip(insights_df, insight_report, subject_df, student_view_df, toppers),
-            file_name=f"analysis_bundle_{key_suffix}.zip",
-            mime="application/zip",
-            key=f"bundle_zip_{key_suffix}",
+        st.markdown(
+            f"""
+            <div class="tab-hero" style="--hero-accent: {theme['palette'][4]};">
+                <div class="tab-hero__header">
+                    <div>
+                        <div class="tab-hero__kicker">&#128230; Reporting Studio</div>
+                        <div class="tab-hero__title">Export Command Center</div>
+                        <div class="tab-hero__text">
+                            Package classroom insights into shareable files, create zip bundles for review cycles, and generate a formatted Excel report for faculty or departmental submission.
+                        </div>
+                    </div>
+                    <div class="tab-hero__icon">&#128209;</div>
+                </div>
+                <div class="tab-hero__chips">
+                    <div class="tab-hero__chip">&#128196; Insights rows: {len(insights_df)}</div>
+                    <div class="tab-hero__chip">&#128218; Subjects: {len(subject_df)}</div>
+                    <div class="tab-hero__chip">&#128101; Students: {len(student_view_df)}</div>
+                    <div class="tab-hero__chip">&#127942; Toppers highlighted: {len(toppers)}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
-        st.divider()
+        export_cards = [
+            {
+                "eyebrow": "Structured Data",
+                "title": "Insights CSV",
+                "text": "Download the prioritized analytics table for filtering, mailing, or spreadsheet follow-up.",
+                "accent": theme["accent"],
+                "icon": "&#128202;",
+                "meta": [f"Rows: {len(insights_df)}", f"File: insights_table_{key_suffix}.csv"],
+                "button_label": "Download Insights CSV",
+                "data": insights_df.to_csv(index=False).encode("utf-8"),
+                "file_name": f"insights_table_{key_suffix}.csv",
+                "mime": "text/csv",
+                "key": f"insights_csv_{key_suffix}",
+            },
+            {
+                "eyebrow": "Narrative Brief",
+                "title": "Insights TXT",
+                "text": "Export the written academic insight report for quick sharing in notes, mail, or documentation.",
+                "accent": theme["palette"][1],
+                "icon": "&#128221;",
+                "meta": [f"Summary: {len(insight_report.splitlines())} lines", f"File: insights_report_{key_suffix}.txt"],
+                "button_label": "Download Insights TXT",
+                "data": insight_report.encode("utf-8"),
+                "file_name": f"insights_report_{key_suffix}.txt",
+                "mime": "text/plain",
+                "key": f"insights_txt_{key_suffix}",
+            },
+            {
+                "eyebrow": "Subject Table",
+                "title": "Subject Analysis CSV",
+                "text": "Export subject-wise pass, fail, topper, and pass-percentage data for deeper department review.",
+                "accent": theme["accent_alt"],
+                "icon": "&#128218;",
+                "meta": [f"Subjects: {len(subject_df)}", f"File: subject_analysis_{key_suffix}.csv"],
+                "button_label": "Download Subject CSV",
+                "data": subject_df.to_csv(index=False).encode("utf-8"),
+                "file_name": f"subject_analysis_{key_suffix}.csv",
+                "mime": "text/csv",
+                "key": f"subject_csv_{key_suffix}",
+            },
+        ]
 
-        if st.button("Generate Excel Report", key=f"excel_report_{key_suffix}"):
+        export_cols = st.columns(3)
+        for col, card in zip(export_cols, export_cards):
+            with col:
+                st.markdown(
+                    f"""
+                    <div class="report-card" style="--report-accent: {card['accent']};">
+                        <div class="report-card__header">
+                            <div class="report-card__eyebrow">{card['eyebrow']}</div>
+                            <div class="report-card__icon">{card['icon']}</div>
+                        </div>
+                        <div class="report-card__title">{escape(card['title'])}</div>
+                        <div class="report-card__text">{escape(card['text'])}</div>
+                        <div class="report-card__meta">
+                            <div class="report-card__pill">&#128206; {escape(card['meta'][0])}</div>
+                            <div class="report-card__pill">&#128193; {escape(card['meta'][1])}</div>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.download_button(
+                    card["button_label"],
+                    data=card["data"],
+                    file_name=card["file_name"],
+                    mime=card["mime"],
+                    key=card["key"],
+                    use_container_width=True,
+                )
+
+        bundle_col, excel_col = st.columns([1.15, 1])
+        with bundle_col:
+            st.markdown(
+                f"""
+                <div class="report-card" style="--report-accent: {theme['danger']};">
+                    <div class="report-card__header">
+                        <div class="report-card__eyebrow">Portable Package</div>
+                        <div class="report-card__icon">&#128230;</div>
+                    </div>
+                    <div class="report-card__title">Full Analysis Bundle</div>
+                    <div class="report-card__text">
+                        Download one zip package containing the insights table, text report, subject analysis, student view, and topper snapshot for the current term workspace.
+                    </div>
+                    <div class="report-card__meta">
+                        <div class="report-card__pill">&#128450; Bundle type: ZIP</div>
+                        <div class="report-card__pill">&#128193; File: analysis_bundle_{key_suffix}.zip</div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.download_button(
+                "Download Full Analysis Bundle (ZIP)",
+                data=bundle_data,
+                file_name=f"analysis_bundle_{key_suffix}.zip",
+                mime="application/zip",
+                key=f"bundle_zip_{key_suffix}",
+                use_container_width=True,
+            )
+
+        with excel_col:
+            st.markdown(
+                f"""
+                <div class="report-card" style="--report-accent: {theme['success']};">
+                    <div class="report-card__header">
+                        <div class="report-card__eyebrow">Formal Report</div>
+                        <div class="report-card__icon">&#128462;</div>
+                    </div>
+                    <div class="report-card__title">Excel Academic Report</div>
+                    <div class="report-card__text">
+                        Generate the styled workbook version with summary sheets, subject analysis, grade views, class toppers, and student matrix pages.
+                    </div>
+                    <div class="report-card__meta">
+                        <div class="report-card__pill">&#127891; Term: {escape(report_semester or term_label)}</div>
+                        <div class="report-card__pill">&#128193; File: {escape(excel_output_file)}</div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        st.markdown(
+            f"""
+            <div class="report-launchpad" style="--launch-accent: {theme['success']};">
+                <div class="report-card__eyebrow">Excel Launchpad</div>
+                <div class="report-launchpad__title">Generate the Faculty Submission Workbook</div>
+                <div class="report-launchpad__text">
+                    Build the polished Excel report using the currently selected institution profile, term context, and analysis outputs from this dashboard session.
+                </div>
+                <div class="report-launchpad__meta">
+                    <div class="report-card__pill">&#127979; {escape(str(st.session_state.get('institution_name', '')))}</div>
+                    <div class="report-card__pill">&#127891; {escape(str(report_semester or term_label))}</div>
+                    <div class="report-card__pill">&#128218; {escape(str(st.session_state.get('class_name', '')))}</div>
+                    <div class="report-card__pill">&#128198; {escape(str(st.session_state.get('academic_year_name', '')))}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if st.button("Generate Excel Report", key=f"excel_report_{key_suffix}", use_container_width=True):
             report_semester = term_label if term_key else st.session_state.get("semester_name", "")
-            report_slug = re.sub(r"[^A-Za-z0-9]+", "_", report_semester).strip("_") or key_suffix
             report = ReportGenerator(
                 engine,
                 university=st.session_state.get("institution_name", ""),
@@ -2528,7 +3775,7 @@ def render_term_tabs(ctx, theme, risk_threshold):
                 term_key=term_key,
                 top_n=top_n,
             )
-            output_file = f"Final_Result_Report_{report_slug}.xlsx"
+            output_file = excel_output_file
             report.generate_report(output_file)
             st.success("Excel report generated successfully.")
             with open(output_file, "rb") as file:
@@ -2538,6 +3785,7 @@ def render_term_tabs(ctx, theme, risk_threshold):
                     file_name=output_file,
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     key=f"excel_download_{key_suffix}",
+                    use_container_width=True,
                 )
 
 ensure_db()
