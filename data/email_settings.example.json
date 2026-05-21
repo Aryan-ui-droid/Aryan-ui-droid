@@ -1,0 +1,9 @@
+{
+  "APP_SMTP_HOST": "smtp.gmail.com",
+  "APP_SMTP_PORT": "587",
+  "APP_SMTP_USERNAME": "your_sender_email@gmail.com",
+  "APP_SMTP_PASSWORD": "your_gmail_app_password",
+  "APP_EMAIL_FROM": "your_sender_email@gmail.com",
+  "APP_EMAIL_FROM_NAME": "Academic Result Intelligence",
+  "APP_SMTP_USE_TLS": "true"
+}

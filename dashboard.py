@@ -1,5 +1,6 @@
 ﻿import io
 import os
+import json
 import sqlite3
 from html import escape
 from hashlib import pbkdf2_hmac, sha1
@@ -8,9 +9,11 @@ from base64 import b64encode
 import re
 import zipfile
 from datetime import datetime
+from urllib.parse import urlencode
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from report_generator import ReportGenerator
 from result_engine import ResultEngine
@@ -66,11 +69,14 @@ SUMMARY_FILTER_LABELS = {
 }
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "data", "app.db")
+DEFAULT_DATA_DIR = os.path.join(BASE_DIR, "data")
+DB_PATH = os.path.abspath(os.getenv("AIRAS_DB_PATH", os.path.join(DEFAULT_DATA_DIR, "app.db")))
+EMAIL_PATTERN = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 
 
 def ensure_db():
-    os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
+    db_dir = os.path.dirname(DB_PATH) or DEFAULT_DATA_DIR
+    os.makedirs(db_dir, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute(
@@ -135,6 +141,19 @@ def ensure_db():
     conn.close()
 
 
+def normalize_email_address(email):
+    return (email or "").strip().lower()
+
+
+def validate_email_address(email):
+    email = normalize_email_address(email)
+    if not email:
+        return "Faculty email is required."
+    if not EMAIL_PATTERN.fullmatch(email):
+        return "Enter a valid email address."
+    return ""
+
+
 def hash_password(password, salt=None):
     if salt is None:
         salt = token_hex(16)
@@ -142,50 +161,127 @@ def hash_password(password, salt=None):
     return hashed, salt
 
 
-def create_user(username, name, department, password, is_admin=0):
-    username = username.strip().lower()
-    name = name.strip()
-    if not username or not name or not password:
-        return False, "Username, name, and password are required."
+def verify_secret(secret, password_hash, salt):
+    if not secret or not password_hash or not salt:
+        return False
+    hashed = pbkdf2_hmac("sha256", secret.encode("utf-8"), salt.encode("utf-8"), 120000).hex()
+    return hashed == password_hash
+
+
+def validate_new_password(password, confirm_password=None):
+    if not password:
+        return "Password is required."
+    if len(password) < 8:
+        return "Password must be at least 8 characters long."
+    if confirm_password is not None and password != confirm_password:
+        return "Passwords do not match."
+    return ""
+
+
+def update_user_password(user_id, new_password):
+    password_hash, salt = hash_password(new_password)
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        UPDATE users
+        SET password_hash = ?, salt = ?
+        WHERE id = ?
+        """,
+        (password_hash, salt, user_id),
+    )
+    conn.commit()
+    updated = cur.rowcount > 0
+    conn.close()
+    return updated
+
+
+def create_user(email, name, department, password, is_admin=0):
+    email = normalize_email_address(email)
+    name = (name or "").strip()
+    department = (department or "").strip()
+    email_issue = validate_email_address(email)
+    if email_issue:
+        return False, email_issue
+    if not name or not password:
+        return False, "Full name and password are required."
+    password_issue = validate_new_password(password)
+    if password_issue:
+        return False, password_issue
     password_hash, salt = hash_password(password)
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     try:
         cur.execute(
             """
-            INSERT INTO users (username, name, department, password_hash, salt, is_admin, created_at)
+            INSERT INTO users (
+                username, name, department, password_hash, salt, is_admin, created_at
+            )
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (username, name, department.strip(), password_hash, salt, is_admin, datetime.now().isoformat()),
+            (
+                email,
+                name,
+                department,
+                password_hash,
+                salt,
+                is_admin,
+                datetime.now().isoformat(),
+            ),
         )
         conn.commit()
     except sqlite3.IntegrityError:
         conn.close()
-        return False, "Username already exists."
+        return False, "An account with this email already exists."
     conn.close()
-    return True, "Account created."
+    return True, "Account created. You can log in now."
 
 
-def authenticate_user(username, password):
-    username = username.strip().lower()
+def authenticate_user(email, password):
+    email = normalize_email_address(email)
+    if validate_email_address(email):
+        return None
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE username = ?", (username,))
+    cur.execute("SELECT * FROM users WHERE username = ?", (email,))
     row = cur.fetchone()
     conn.close()
     if row is None:
         return None
-    hashed = pbkdf2_hmac("sha256", password.encode("utf-8"), row["salt"].encode("utf-8"), 120000).hex()
-    if hashed != row["password_hash"]:
+    if not verify_secret(password, row["password_hash"], row["salt"]):
         return None
     return {
         "id": row["id"],
         "username": row["username"],
+        "email": row["username"],
         "name": row["name"],
         "department": row["department"],
         "is_admin": bool(row["is_admin"]),
     }
+
+
+def change_user_password(user_id, current_password, new_password):
+    password_issue = validate_new_password(new_password)
+    if password_issue:
+        return False, password_issue
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT password_hash, salt FROM users WHERE id = ?", (user_id,))
+    row = cur.fetchone()
+    if row is None:
+        conn.close()
+        return False, "Account not found."
+    if not verify_secret(current_password, row["password_hash"], row["salt"]):
+        conn.close()
+        return False, "Current password is incorrect."
+    conn.close()
+
+    if not update_user_password(user_id, new_password):
+        return False, "Could not update the password right now."
+    return True, "Password updated successfully."
 
 
 def create_session(user_id):
@@ -230,6 +326,7 @@ def get_user_by_session(token):
     return {
         "id": row["id"],
         "username": row["username"],
+        "email": row["username"],
         "name": row["name"],
         "department": row["department"],
         "is_admin": bool(row["is_admin"]),
@@ -2380,7 +2477,7 @@ def login_screen():
             with st.form("login_form"):
                 st.markdown('<div class="login-card-title">Result Analysis Portal</div>', unsafe_allow_html=True)
                 st.markdown('<div class="login-card-subtitle">Please login to continue</div>', unsafe_allow_html=True)
-                username = st.text_input("Faculty ID / Email", key="login_user")
+                username = st.text_input("Faculty Email", key="login_user")
                 password = st.text_input("Password", type="password", key="login_pass")
                 submit = st.form_submit_button("Login")
             if submit:
@@ -2389,14 +2486,14 @@ def login_screen():
                     token = create_session(user["id"])
                     st.session_state["user"] = user
                     st.session_state["session_token"] = token
-                    st.session_state["uploaded_file_bytes"] = None
-                    st.session_state["uploaded_filename"] = ""
-                    st.session_state["engine_cache"] = None
-                    st.session_state["engine_signature"] = ""
-                    clear_summary_filter_state()
-                    set_query_param("session", token)
-                    st.success("Login successful. Redirecting to upload...")
-                    st.rerun()
+                    reset_uploaded_workbook_state()
+                    set_flash_notice("Login successful. Continue by importing a workbook.", "success")
+                    queue_new_tab_navigation(
+                        "upload",
+                        title="Opening the file import page in a new tab",
+                        description="Your faculty session is ready. The workbook import page is opening in a separate browser tab to match the website flow you showed.",
+                        primary_label="Open File Import",
+                    )
                 else:
                     st.error("Invalid credentials.")
 
@@ -2406,15 +2503,20 @@ def login_screen():
                 st.markdown('<div class="login-card-subtitle">Register to access analytics</div>', unsafe_allow_html=True)
                 full_name = st.text_input("Full Name", key="reg_name")
                 department = st.text_input("Department", key="reg_dept")
-                username = st.text_input("Faculty ID / Email", key="reg_user")
+                username = st.text_input("Faculty Email", key="reg_user")
                 password = st.text_input("Password", type="password", key="reg_pass")
+                confirm_password = st.text_input("Confirm Password", type="password", key="reg_pass_confirm")
                 submit = st.form_submit_button("Create Account")
             if submit:
-                ok, message = create_user(username, full_name, department, password)
-                if ok:
-                    st.success("Account created. You can log in now.")
+                password_issue = validate_new_password(password, confirm_password)
+                if password_issue:
+                    st.error(password_issue)
                 else:
-                    st.error(message)
+                    ok, message = create_user(username, full_name, department, password)
+                    if ok:
+                        st.success(message)
+                    else:
+                        st.error(message)
 
 
 def upload_screen():
@@ -2483,8 +2585,13 @@ def upload_screen():
         uploaded_file.name,
         st.session_state["uploaded_file_bytes"],
     )
-    st.success("File uploaded. Redirecting to the analysis dashboard...")
-    st.rerun()
+    set_flash_notice("Workbook uploaded. Opening the dashboard.", "success")
+    queue_new_tab_navigation(
+        "dashboard",
+        title="Opening the analysis dashboard in a new tab",
+        description="The workbook has been stored successfully. The dashboard is opening in a separate browser tab so the analysis feels like the next step of a real website.",
+        primary_label="Open Dashboard",
+    )
 
 
 def donut_chart(data, label_col, value_col, title, colors):
@@ -2852,6 +2959,7 @@ def build_term_context(
         "engine": engine,
         "term_key": term_key,
         "term_label": term_label,
+        "top_n": top_n,
         "sheet_name": sheet_name,
         "overview": overview,
         "subject_df": subject_df,
@@ -2920,6 +3028,7 @@ def render_term_tabs(ctx, theme, risk_threshold):
     engine = ctx["engine"]
     term_key = ctx["term_key"]
     term_label = ctx["term_label"]
+    top_n = ctx["top_n"]
     overview = ctx["overview"]
     subject_df = ctx["subject_df"]
     grade_df = ctx["grade_df"]
@@ -3788,280 +3897,513 @@ def render_term_tabs(ctx, theme, risk_threshold):
                     use_container_width=True,
                 )
 
-ensure_db()
-if "user" not in st.session_state:
-    st.session_state["user"] = None
-if "session_token" not in st.session_state:
-    st.session_state["session_token"] = ""
-if "uploaded_file_bytes" not in st.session_state:
+APP_PAGES = {}
+
+
+def reset_uploaded_workbook_state():
     st.session_state["uploaded_file_bytes"] = None
-if "uploaded_filename" not in st.session_state:
     st.session_state["uploaded_filename"] = ""
-if "engine_cache" not in st.session_state:
     st.session_state["engine_cache"] = None
-if "engine_signature" not in st.session_state:
     st.session_state["engine_signature"] = ""
+    st.session_state["profile_source_signature"] = None
+    clear_summary_filter_state()
 
-if st.session_state["user"] is None:
+
+def clear_pending_navigation_state():
+    st.session_state.pop("pending_new_tab_navigation", None)
+    st.session_state.pop("opened_new_tab_navigation_id", None)
+
+
+def set_flash_notice(message, level="success"):
+    st.session_state["flash_notice"] = {"message": message, "level": level}
+
+
+def show_flash_notice():
+    notice = st.session_state.pop("flash_notice", None)
+    if not notice:
+        return
+    level = notice.get("level", "info")
+    message = notice.get("message", "")
+    alert = getattr(st, level, st.info)
+    alert(message)
+
+
+def initialize_app_state():
+    ensure_db()
+    defaults = {
+        "user": None,
+        "session_token": "",
+        "uploaded_file_bytes": None,
+        "uploaded_filename": "",
+        "engine_cache": None,
+        "engine_signature": "",
+        "pending_new_tab_navigation": None,
+        "opened_new_tab_navigation_id": "",
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+
+def restore_session_from_query():
+    if st.session_state.get("user") is not None:
+        return
     token = get_query_param("session")
-    if token:
-        restored_user = get_user_by_session(token)
-        if restored_user:
-            st.session_state["user"] = restored_user
-            st.session_state["session_token"] = token
-            filename, file_bytes = load_session_upload(token)
-            if file_bytes:
-                st.session_state["uploaded_file_bytes"] = file_bytes
-                st.session_state["uploaded_filename"] = filename or "uploaded.xlsx"
+    if not token:
+        return
+    restored_user = get_user_by_session(token)
+    if not restored_user:
+        return
+    st.session_state["user"] = restored_user
+    st.session_state["session_token"] = token
+    filename, file_bytes = load_session_upload(token)
+    if file_bytes:
+        st.session_state["uploaded_file_bytes"] = file_bytes
+        st.session_state["uploaded_filename"] = filename or "uploaded.xlsx"
 
-if st.session_state["user"] is None:
-    login_screen()
-    st.stop()
 
-if not st.session_state.get("uploaded_file_bytes"):
-    apply_theme(THEMES[DEFAULT_THEME_NAME])
-    upload_screen()
-    st.stop()
+def active_session_query_params():
+    token = st.session_state.get("session_token", "")
+    return {"session": token} if token else {}
 
-PROFILE_FALLBACK_DEFAULTS = {
-    "institution": "SOET MGM UNIVERSITY",
-    "department": "CSE (Integrated)",
-    "class_name": "Data Science",
-    "semester": "Sem 5",
-    "academic_year": "2025-2026",
-}
 
-file_bytes = st.session_state.get("uploaded_file_bytes")
-uploaded_filename = st.session_state.get("uploaded_filename", "uploaded.xlsx")
-if not file_bytes:
-    st.session_state["view"] = "upload"
+def build_page_url(page_key, preserve_session=True):
+    page = APP_PAGES.get(page_key)
+    if page is None:
+        return "/"
+    path = f"/{page.url_path}" if getattr(page, "url_path", "") else "/"
+    query_params = active_session_query_params() if preserve_session else {}
+    query_string = urlencode(query_params, doseq=True)
+    return f"{path}?{query_string}" if query_string else path
+
+
+def queue_new_tab_navigation(page_key, title, description, primary_label):
+    st.session_state["pending_new_tab_navigation"] = {
+        "id": token_hex(8),
+        "page_key": page_key,
+        "title": title,
+        "description": description,
+        "primary_label": primary_label,
+    }
     st.rerun()
 
-hero_col, utility_col = st.columns([1.35, 0.95], gap="large")
 
-with hero_col:
+def render_pending_new_tab_navigation():
+    request = st.session_state.get("pending_new_tab_navigation")
+    if not request:
+        return False
+
+    apply_theme(THEMES[DEFAULT_THEME_NAME])
+    target_url = build_page_url(request["page_key"])
+    request_id = request.get("id", "")
+
+    if st.session_state.get("opened_new_tab_navigation_id") != request_id:
+        components.html(
+            f"""
+            <script>
+            const targetUrl = {json.dumps(target_url)};
+            setTimeout(() => {{
+                const popup = window.parent.open(targetUrl, "_blank", "noopener,noreferrer");
+                if (popup) {{
+                    popup.focus();
+                }}
+            }}, 60);
+            </script>
+            """,
+            height=0,
+        )
+        st.session_state["opened_new_tab_navigation_id"] = request_id
+
     st.markdown(
         f"""
         <div class="hero-wrap">
             <div class="hero-orb orb-a"></div>
             <div class="hero-orb orb-b"></div>
-            <h1 class="hero-title">Academic Result Intelligence Dashboard</h1>
-            <p class="hero-subtitle">Auto-detects uploaded workbook schema, builds a cohort digital twin, and turns the workbook into a cleaner, export-ready analytics experience.</p>
-            <span class="hero-badge">Interactive Visual Workspace</span>
+            <h1 class="hero-title">{escape(str(request['title']))}</h1>
+            <p class="hero-subtitle">{escape(str(request['description']))}</p>
+            <span class="hero-badge">Browser-style page transition</span>
             <div class="hero-meta">
-                <span>Active workbook: {uploaded_filename}</span>
-                <span>Live multi-tab analysis</span>
-                <span>Export-ready outputs</span>
+                <span>New tab requested</span>
+                <span>Session preserved</span>
+                <span>Fallback button available</span>
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-with utility_col:
-    quick_upload = st.file_uploader(
-        "Browse another Excel file",
-        type=["xlsx"],
-        key="dashboard_uploader_main",
-        label_visibility="collapsed",
-    )
-if quick_upload is not None:
-    st.session_state["uploaded_file_bytes"] = quick_upload.getvalue()
-    st.session_state["uploaded_filename"] = quick_upload.name
-    st.session_state["engine_cache"] = None
-    st.session_state["engine_signature"] = ""
-    st.session_state["profile_source_signature"] = None
-    clear_summary_filter_state()
-    save_session_upload(
-        st.session_state.get("session_token", ""),
-        quick_upload.name,
-        st.session_state["uploaded_file_bytes"],
-    )
-    file_bytes = st.session_state["uploaded_file_bytes"]
-    uploaded_filename = st.session_state["uploaded_filename"]
-    st.success("New file loaded. Analyzing...")
+    st.info("If the new browser tab does not open automatically, use the button below.")
 
-try:
-    workbook = pd.ExcelFile(io.BytesIO(file_bytes))
-except Exception:
-    st.error("Unable to open this Excel file. Please upload a valid workbook.")
-    st.stop()
+    action_left, action_right, action_third = st.columns([0.34, 0.24, 0.18])
+    with action_left:
+        st.link_button(
+            request["primary_label"],
+            target_url,
+            type="primary",
+            use_container_width=True,
+        )
+    with action_right:
+        if st.button("Open Here Instead", key=f"same_tab_{request_id}", use_container_width=True):
+            st.session_state.pop("pending_new_tab_navigation", None)
+            navigate_to(request["page_key"])
+    with action_third:
+        if st.button("Cancel", key=f"cancel_nav_{request_id}", use_container_width=True):
+            st.session_state.pop("pending_new_tab_navigation", None)
+            st.rerun()
 
-with st.sidebar:
+    return True
+
+
+def navigate_to(page_key, preserve_session=True):
+    page = APP_PAGES.get(page_key)
+    if page is None:
+        st.stop()
+    query_params = active_session_query_params() if preserve_session else {}
+    st.switch_page(page, query_params=query_params)
+
+
+def logout_current_user():
+    delete_session_upload(st.session_state.get("session_token"))
+    delete_session(st.session_state.get("session_token"))
+    st.session_state["user"] = None
+    st.session_state["session_token"] = ""
+    reset_uploaded_workbook_state()
+    clear_pending_navigation_state()
+
+
+def render_login_page():
+    if render_pending_new_tab_navigation():
+        st.stop()
+    if st.session_state.get("user") is not None:
+        next_page = "dashboard" if st.session_state.get("uploaded_file_bytes") else "upload"
+        navigate_to(next_page)
+    show_flash_notice()
+    login_screen()
+
+
+def render_upload_page():
+    if st.session_state.get("user") is None:
+        navigate_to("login", preserve_session=False)
+
+    apply_theme(THEMES[DEFAULT_THEME_NAME])
+    if render_pending_new_tab_navigation():
+        st.stop()
+    show_flash_notice()
+
+    user_name = escape(str(st.session_state["user"]["name"]))
+    current_file = str(st.session_state.get("uploaded_filename", "")).strip()
+    current_file_chip = f"<span class='chip'>Current Workbook: {escape(current_file)}</span>" if current_file else ""
     st.markdown(
-        """
-        <div class="sidebar-brand">
-            <div class="sidebar-brand__kicker">Faculty Command Center</div>
-            <div class="sidebar-brand__title">Result Analysis Dashboard</div>
-            <div class="sidebar-brand__text">Tune the visual theme, filters, workbook choices, and reporting session from one place.</div>
-        </div>
-        """,
+        f"<div class='profile-ribbon'>"
+        f"<span class='chip'>Signed in: {user_name}</span>"
+        f"<span class='chip'>Step 2 of 3: Import Workbook</span>"
+        f"{current_file_chip}"
+        f"</div>",
         unsafe_allow_html=True,
     )
-    st.markdown("<div class='sidebar-section-title'>Workspace Settings</div>", unsafe_allow_html=True)
-    theme_name = st.selectbox(
-        "Visual Theme",
-        list(THEMES.keys()),
-        index=list(THEMES.keys()).index(DEFAULT_THEME_NAME),
-    )
-    top_n = st.slider("Top Students to Highlight", min_value=3, max_value=10, value=3)
-    risk_threshold = st.slider("At-Risk SGPA Threshold", min_value=4.0, max_value=8.0, value=6.0, step=0.1)
-    show_only_failed = st.toggle("Show Only Failed in Matrix", value=False)
-    matrix_statuses = st.multiselect("Matrix Status Filter", ["Passed", "Failed"], default=["Passed", "Failed"])
-    student_search = st.text_input("Search Student (Name or PRN)", "").strip()
 
-    st.markdown("<div class='sidebar-section-title'>Workbook</div>", unsafe_allow_html=True)
-    sheet_name = st.selectbox("Workbook Sheet", workbook.sheet_names, index=0)
-    detected_details = extract_academic_details(file_bytes, sheet_name)
-    auto_detect_profile = st.toggle("Auto-detect Academic Profile", value=True)
+    action_left, action_right, _ = st.columns([0.22, 0.18, 0.60])
+    with action_left:
+        if st.session_state.get("uploaded_file_bytes") and st.button("Return to Dashboard", use_container_width=True):
+            navigate_to("dashboard")
+    with action_right:
+        if st.button("Logout", key="upload_logout", use_container_width=True):
+            logout_current_user()
+            set_flash_notice("Signed out successfully.", "success")
+            navigate_to("login", preserve_session=False)
 
-    detected_profile = {
-        "institution": detected_details.get("institution", "").strip(),
-        "department": detected_details.get("department", "").strip(),
-        "class_name": detected_details.get("class_name", "").strip(),
-        "semester": normalize_semester(detected_details.get("semester", "")),
-        "academic_year": normalize_academic_year(detected_details.get("academic_year", "")),
+    upload_screen()
+
+
+def dashboard_screen():
+    PROFILE_FALLBACK_DEFAULTS = {
+        "institution": "SOET MGM UNIVERSITY",
+        "department": "CSE (Integrated)",
+        "class_name": "Data Science",
+        "semester": "Sem 5",
+        "academic_year": "2025-2026",
     }
 
-    profile_defaults = {
-        "institution": detected_profile["institution"] or PROFILE_FALLBACK_DEFAULTS["institution"],
-        "department": detected_profile["department"] or PROFILE_FALLBACK_DEFAULTS["department"],
-        "class_name": detected_profile["class_name"] or PROFILE_FALLBACK_DEFAULTS["class_name"],
-        "semester": detected_profile["semester"] or PROFILE_FALLBACK_DEFAULTS["semester"],
-        "academic_year": detected_profile["academic_year"] or PROFILE_FALLBACK_DEFAULTS["academic_year"],
-    }
+    file_bytes = st.session_state.get("uploaded_file_bytes")
+    uploaded_filename = st.session_state.get("uploaded_filename", "uploaded.xlsx")
+    if not file_bytes:
+        navigate_to("upload")
 
-    apply_detected = st.button(
-        "Apply Detected Profile",
-        disabled=not auto_detect_profile,
-        use_container_width=True,
-    )
+    escaped_filename = escape(str(uploaded_filename))
+    current_user_name = escape(str(st.session_state["user"]["name"]))
+    current_department = escape(str(st.session_state["user"].get("department", "")).strip()) or "Faculty Workspace"
 
-    source_signature = f"{uploaded_filename}:{sheet_name}:{profile_defaults}"
-    first_load_for_source = st.session_state.get("profile_source_signature") != source_signature
-    if first_load_for_source or (auto_detect_profile and apply_detected):
-        st.session_state["institution_name"] = profile_defaults["institution"]
-        st.session_state["department_name"] = profile_defaults["department"]
-        st.session_state["class_name"] = profile_defaults["class_name"]
-        st.session_state["semester_name"] = profile_defaults["semester"]
-        st.session_state["academic_year_name"] = profile_defaults["academic_year"]
-        st.session_state["profile_source_signature"] = source_signature
+    hero_col, utility_col = st.columns([1.35, 0.95], gap="large")
 
-    st.markdown("<div class='sidebar-section-title'>Academic Profile</div>", unsafe_allow_html=True)
-    st.caption("Auto mode reads metadata from sheet. You can still edit fields manually anytime.")
-    institution_name = st.text_input("Institution", key="institution_name")
-    department_name = st.text_input("Department", key="department_name")
-    class_name = st.text_input("Class / Program", key="class_name")
-    semester_name = st.text_input("Semester", key="semester_name")
-    academic_year_name = st.text_input("Academic Year", key="academic_year_name")
+    with hero_col:
+        st.markdown(
+            f"""
+            <div class="hero-wrap">
+                <div class="hero-orb orb-a"></div>
+                <div class="hero-orb orb-b"></div>
+                <h1 class="hero-title">Academic Result Intelligence Dashboard</h1>
+                <p class="hero-subtitle">Auto-detects uploaded workbook schema, builds a cohort digital twin, and turns the workbook into a cleaner, export-ready analytics experience.</p>
+                <span class="hero-badge">Interactive Visual Workspace</span>
+                <div class="hero-meta">
+                    <span>Active workbook: {escaped_filename}</span>
+                    <span>Live multi-tab analysis</span>
+                    <span>Export-ready outputs</span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    st.markdown("<div class='sidebar-section-title'>Session</div>", unsafe_allow_html=True)
-    st.markdown(
-        f"<div class='sidebar-session-chip'>Signed in as <strong>{st.session_state['user']['name']}</strong></div>",
-        unsafe_allow_html=True,
-    )
-    if st.session_state["user"].get("department"):
-        st.caption(st.session_state["user"]["department"])
-    if st.button("Logout", use_container_width=True):
-        delete_session_upload(st.session_state.get("session_token"))
-        delete_session(st.session_state.get("session_token"))
-        st.session_state["user"] = None
-        st.session_state["session_token"] = ""
-        st.session_state["uploaded_file_bytes"] = None
-        st.session_state["uploaded_filename"] = ""
-        st.session_state["engine_cache"] = None
-        st.session_state["engine_signature"] = ""
-        clear_summary_filter_state()
-        clear_query_params()
-        st.rerun()
+    with utility_col:
+        st.markdown(
+            f"""
+            <div class="workspace-card">
+                <div class="workspace-card__kicker">Workspace Status</div>
+                <div class="workspace-card__title">Dashboard session ready</div>
+                <div class="workspace-card__text">You are reviewing <strong>{escaped_filename}</strong> in a dedicated analytics view.</div>
+                <div class="workspace-card__stats">
+                    <div class="workspace-stat">
+                        <div class="workspace-stat__value">{current_user_name}</div>
+                        <div class="workspace-stat__label">Signed in</div>
+                    </div>
+                    <div class="workspace-stat">
+                        <div class="workspace-stat__value">Step 3</div>
+                        <div class="workspace-stat__label">Dashboard</div>
+                    </div>
+                    <div class="workspace-stat">
+                        <div class="workspace-stat__value">{current_department}</div>
+                        <div class="workspace-stat__label">Department</div>
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button("Import Another Workbook", key="dashboard_go_upload", use_container_width=True):
+            navigate_to("upload")
 
-theme = THEMES[theme_name]
-apply_theme(theme)
+    show_flash_notice()
 
-engine = None
-engine_signature = f"{ENGINE_CACHE_VERSION}:{sha1(file_bytes).hexdigest()}:{sheet_name}" if file_bytes else ""
-cached_engine = st.session_state.get("engine_cache")
-cached_signature = st.session_state.get("engine_signature")
-
-if cached_engine is not None and cached_signature == engine_signature:
-    engine = cached_engine
-else:
     try:
-        with st.spinner("Analyzing workbook..."):
-            engine = ResultEngine(io.BytesIO(file_bytes), sheet_name=sheet_name)
-            engine.load_data()
-        st.session_state["engine_cache"] = engine
-        st.session_state["engine_signature"] = engine_signature
-    except Exception as exc:
-        st.error("Could not parse this workbook with current schema detection.")
-        st.exception(exc)
+        workbook = pd.ExcelFile(io.BytesIO(file_bytes))
+    except Exception:
+        st.error("Unable to open this Excel file. Please upload a valid workbook.")
         st.stop()
 
-overview_global = engine.get_class_overview()
-invalid_students = engine.get_invalid_students()
+    with st.sidebar:
+        st.markdown(
+            """
+            <div class="sidebar-brand">
+                <div class="sidebar-brand__kicker">Faculty Command Center</div>
+                <div class="sidebar-brand__title">Result Analysis Dashboard</div>
+                <div class="sidebar-brand__text">Tune the visual theme, filters, workbook choices, and reporting session from one place.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown("<div class='sidebar-section-title'>Workspace Settings</div>", unsafe_allow_html=True)
+        theme_name = st.selectbox(
+            "Visual Theme",
+            list(THEMES.keys()),
+            index=list(THEMES.keys()).index(DEFAULT_THEME_NAME),
+        )
+        top_n = st.slider("Top Students to Highlight", min_value=3, max_value=10, value=3)
+        risk_threshold = st.slider("At-Risk SGPA Threshold", min_value=4.0, max_value=8.0, value=6.0, step=0.1)
+        show_only_failed = st.toggle("Show Only Failed in Matrix", value=False)
+        matrix_statuses = st.multiselect("Matrix Status Filter", ["Passed", "Failed"], default=["Passed", "Failed"])
+        student_search = st.text_input("Search Student (Name or PRN)", "").strip()
 
-profile_payload = {
-    "institution": institution_name,
-    "department": department_name,
-    "class_name": class_name,
-    "semester": semester_name,
-    "academic_year": academic_year_name,
-}
-record_history(
-    st.session_state["user"]["id"],
-    file_bytes,
-    uploaded_filename,
-    sheet_name,
-    overview_global,
-    profile_payload,
-)
+        st.markdown("<div class='sidebar-section-title'>Workbook</div>", unsafe_allow_html=True)
+        sheet_name = st.selectbox("Workbook Sheet", workbook.sheet_names, index=0)
+        detected_details = extract_academic_details(file_bytes, sheet_name)
+        auto_detect_profile = st.toggle("Auto-detect Academic Profile", value=True)
 
-st.success("File uploaded and analyzed successfully.")
-if not invalid_students.empty:
-    st.warning(f"{len(invalid_students)} students have blank or missing subject data and were excluded from analysis.")
-    with st.expander("View excluded students"):
-        st.dataframe(invalid_students, use_container_width=True)
-st.markdown(
-    f"<div class='profile-ribbon'>"
-    f"<span class='chip'>Workbook: {uploaded_filename}</span>"
-    f"<span class='chip'>Institution: {institution_name}</span>"
-    f"<span class='chip'>Department: {department_name}</span>"
-    f"<span class='chip'>Class: {class_name}</span>"
-    f"<span class='chip'>Semester: {semester_name}</span>"
-    f"<span class='chip'>Academic Year: {academic_year_name}</span>"
-    f"</div>",
-    unsafe_allow_html=True,
-)
+        detected_profile = {
+            "institution": detected_details.get("institution", "").strip(),
+            "department": detected_details.get("department", "").strip(),
+            "class_name": detected_details.get("class_name", "").strip(),
+            "semester": normalize_semester(detected_details.get("semester", "")),
+            "academic_year": normalize_academic_year(detected_details.get("academic_year", "")),
+        }
 
-terms = engine.get_terms()
-if terms:
-    term_labels = [engine.get_term_label(t) for t in terms]
-    st.caption(f"Detected terms: {', '.join(term_labels)}")
-    term_tabs = st.tabs(term_labels)
-    for term_key, tab in zip(terms, term_tabs):
-        with tab:
-            ctx = build_term_context(
-                engine,
-                term_key,
-                risk_threshold,
-                top_n,
-                matrix_statuses,
-                show_only_failed,
-                student_search,
-                sheet_name,
-                st.session_state.get(get_summary_filter_state_key(term_key), ""),
-            )
-            render_term_tabs(ctx, theme, risk_threshold)
-else:
-    ctx = build_term_context(
-        engine,
-        None,
-        risk_threshold,
-        top_n,
-        matrix_statuses,
-        show_only_failed,
-        student_search,
+        profile_defaults = {
+            "institution": detected_profile["institution"] or PROFILE_FALLBACK_DEFAULTS["institution"],
+            "department": detected_profile["department"] or PROFILE_FALLBACK_DEFAULTS["department"],
+            "class_name": detected_profile["class_name"] or PROFILE_FALLBACK_DEFAULTS["class_name"],
+            "semester": detected_profile["semester"] or PROFILE_FALLBACK_DEFAULTS["semester"],
+            "academic_year": detected_profile["academic_year"] or PROFILE_FALLBACK_DEFAULTS["academic_year"],
+        }
+
+        apply_detected = st.button(
+            "Apply Detected Profile",
+            disabled=not auto_detect_profile,
+            use_container_width=True,
+        )
+
+        source_signature = f"{uploaded_filename}:{sheet_name}:{profile_defaults}"
+        first_load_for_source = st.session_state.get("profile_source_signature") != source_signature
+        if first_load_for_source or (auto_detect_profile and apply_detected):
+            st.session_state["institution_name"] = profile_defaults["institution"]
+            st.session_state["department_name"] = profile_defaults["department"]
+            st.session_state["class_name"] = profile_defaults["class_name"]
+            st.session_state["semester_name"] = profile_defaults["semester"]
+            st.session_state["academic_year_name"] = profile_defaults["academic_year"]
+            st.session_state["profile_source_signature"] = source_signature
+
+        st.markdown("<div class='sidebar-section-title'>Academic Profile</div>", unsafe_allow_html=True)
+        st.caption("Auto mode reads metadata from sheet. You can still edit fields manually anytime.")
+        institution_name = st.text_input("Institution", key="institution_name")
+        department_name = st.text_input("Department", key="department_name")
+        class_name = st.text_input("Class / Program", key="class_name")
+        semester_name = st.text_input("Semester", key="semester_name")
+        academic_year_name = st.text_input("Academic Year", key="academic_year_name")
+
+        st.markdown("<div class='sidebar-section-title'>Session</div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='sidebar-session-chip'>Signed in as <strong>{st.session_state['user']['name']}</strong></div>",
+            unsafe_allow_html=True,
+        )
+        if st.session_state["user"].get("department"):
+            st.caption(st.session_state["user"]["department"])
+        with st.expander("Change Password"):
+            with st.form("change_password_form"):
+                current_password = st.text_input("Current Password", type="password", key="change_current_password")
+                new_password = st.text_input("New Password", type="password", key="change_new_password")
+                confirm_password = st.text_input("Confirm New Password", type="password", key="change_confirm_password")
+                change_submit = st.form_submit_button("Update Password")
+            if change_submit:
+                password_issue = validate_new_password(new_password, confirm_password)
+                if password_issue:
+                    st.error(password_issue)
+                else:
+                    ok, message = change_user_password(st.session_state["user"]["id"], current_password, new_password)
+                    if ok:
+                        st.success(message)
+                    else:
+                        st.error(message)
+
+        if st.button("Logout", use_container_width=True):
+            logout_current_user()
+            set_flash_notice("Signed out successfully.", "success")
+            navigate_to("login", preserve_session=False)
+
+    theme = THEMES[theme_name]
+    apply_theme(theme)
+
+    engine = None
+    engine_signature = f"{ENGINE_CACHE_VERSION}:{sha1(file_bytes).hexdigest()}:{sheet_name}" if file_bytes else ""
+    cached_engine = st.session_state.get("engine_cache")
+    cached_signature = st.session_state.get("engine_signature")
+
+    if cached_engine is not None and cached_signature == engine_signature:
+        engine = cached_engine
+    else:
+        try:
+            with st.spinner("Analyzing workbook..."):
+                engine = ResultEngine(io.BytesIO(file_bytes), sheet_name=sheet_name)
+                engine.load_data()
+            st.session_state["engine_cache"] = engine
+            st.session_state["engine_signature"] = engine_signature
+        except Exception as exc:
+            st.error("Could not parse this workbook with current schema detection.")
+            st.exception(exc)
+            st.stop()
+
+    overview_global = engine.get_class_overview()
+    invalid_students = engine.get_invalid_students()
+
+    profile_payload = {
+        "institution": institution_name,
+        "department": department_name,
+        "class_name": class_name,
+        "semester": semester_name,
+        "academic_year": academic_year_name,
+    }
+    record_history(
+        st.session_state["user"]["id"],
+        file_bytes,
+        uploaded_filename,
         sheet_name,
-        st.session_state.get(get_summary_filter_state_key(None), ""),
+        overview_global,
+        profile_payload,
     )
-    render_term_tabs(ctx, theme, risk_threshold)
+
+    if not invalid_students.empty:
+        st.warning(f"{len(invalid_students)} students have blank or missing subject data and were excluded from analysis.")
+        with st.expander("View excluded students"):
+            st.dataframe(invalid_students, use_container_width=True)
+    st.markdown(
+        f"<div class='profile-ribbon'>"
+        f"<span class='chip'>Workbook: {escaped_filename}</span>"
+        f"<span class='chip'>Institution: {escape(str(institution_name))}</span>"
+        f"<span class='chip'>Department: {escape(str(department_name))}</span>"
+        f"<span class='chip'>Class: {escape(str(class_name))}</span>"
+        f"<span class='chip'>Semester: {escape(str(semester_name))}</span>"
+        f"<span class='chip'>Academic Year: {escape(str(academic_year_name))}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    terms = engine.get_terms()
+    if terms:
+        term_labels = [engine.get_term_label(t) for t in terms]
+        st.caption(f"Detected terms: {', '.join(term_labels)}")
+        term_tabs = st.tabs(term_labels)
+        for term_key, tab in zip(terms, term_tabs):
+            with tab:
+                ctx = build_term_context(
+                    engine,
+                    term_key,
+                    risk_threshold,
+                    top_n,
+                    matrix_statuses,
+                    show_only_failed,
+                    student_search,
+                    sheet_name,
+                    st.session_state.get(get_summary_filter_state_key(term_key), ""),
+                )
+                render_term_tabs(ctx, theme, risk_threshold)
+    else:
+        ctx = build_term_context(
+            engine,
+            None,
+            risk_threshold,
+            top_n,
+            matrix_statuses,
+            show_only_failed,
+            student_search,
+            sheet_name,
+            st.session_state.get(get_summary_filter_state_key(None), ""),
+        )
+        render_term_tabs(ctx, theme, risk_threshold)
+
+
+def render_dashboard_page():
+    if st.session_state.get("user") is None:
+        navigate_to("login", preserve_session=False)
+    if not st.session_state.get("uploaded_file_bytes"):
+        navigate_to("upload")
+    dashboard_screen()
+
+
+def main():
+    initialize_app_state()
+    restore_session_from_query()
+
+    login_page = st.Page(render_login_page, title="Login", url_path="login", default=True)
+    upload_page = st.Page(render_upload_page, title="Import File", url_path="import")
+    dashboard_page = st.Page(render_dashboard_page, title="Dashboard", url_path="dashboard")
+
+    APP_PAGES.update(
+        {
+            "login": login_page,
+            "upload": upload_page,
+            "dashboard": dashboard_page,
+        }
+    )
+
+    current_page = st.navigation([login_page, upload_page, dashboard_page], position="hidden")
+    current_page.run()
+
+
+main()
