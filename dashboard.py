@@ -71,18 +71,64 @@ SUMMARY_FILTER_LABELS = {
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.abspath(os.getenv("AIRAS_DB_PATH", os.path.join(DEFAULT_DATA_DIR, "app.db")))
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+USE_POSTGRES = bool(DATABASE_URL)
 EMAIL_PATTERN = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 
 
-def ensure_db():
-    db_dir = os.path.dirname(DB_PATH) or DEFAULT_DATA_DIR
-    os.makedirs(db_dir, exist_ok=True)
+def get_db_connection(row_factory=False):
+    if USE_POSTGRES:
+        try:
+            import psycopg2
+            import psycopg2.extras
+        except ImportError as exc:
+            raise RuntimeError("DATABASE_URL is set, but psycopg2-binary is not installed.") from exc
+
+        cursor_factory = psycopg2.extras.RealDictCursor if row_factory else None
+        return psycopg2.connect(DATABASE_URL, cursor_factory=cursor_factory)
+
     conn = sqlite3.connect(DB_PATH)
+    if row_factory:
+        conn.row_factory = sqlite3.Row
+    return conn
+
+
+def db_param_sql(sql):
+    return sql.replace("?", "%s") if USE_POSTGRES else sql
+
+
+def db_binary(value):
+    if USE_POSTGRES:
+        import psycopg2
+
+        return psycopg2.Binary(value)
+    return sqlite3.Binary(value)
+
+
+def is_unique_violation(error):
+    if not USE_POSTGRES:
+        return isinstance(error, sqlite3.IntegrityError)
+    try:
+        import psycopg2
+
+        return isinstance(error, psycopg2.IntegrityError)
+    except ImportError:
+        return False
+
+
+def ensure_db():
+    if not USE_POSTGRES:
+        db_dir = os.path.dirname(DB_PATH) or DEFAULT_DATA_DIR
+        os.makedirs(db_dir, exist_ok=True)
+    conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute(
-        """
+    id_type = "SERIAL PRIMARY KEY" if USE_POSTGRES else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    blob_type = "BYTEA" if USE_POSTGRES else "BLOB"
+    real_type = "DOUBLE PRECISION" if USE_POSTGRES else "REAL"
+    statements = [
+        f"""
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {id_type},
             username TEXT UNIQUE NOT NULL,
             name TEXT NOT NULL,
             department TEXT,
@@ -91,12 +137,10 @@ def ensure_db():
             is_admin INTEGER DEFAULT 0,
             created_at TEXT NOT NULL
         )
-        """
-    )
-    cur.execute(
-        """
+        """,
+        f"""
         CREATE TABLE IF NOT EXISTS history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {id_type},
             user_id INTEGER NOT NULL,
             uploaded_at TEXT NOT NULL,
             filename TEXT NOT NULL,
@@ -104,8 +148,8 @@ def ensure_db():
             total_students INTEGER,
             passed INTEGER,
             failed INTEGER,
-            pass_percent REAL,
-            average_sgpa REAL,
+            pass_percent {real_type},
+            average_sgpa {real_type},
             institution TEXT,
             department TEXT,
             class_name TEXT,
@@ -114,9 +158,7 @@ def ensure_db():
             file_hash TEXT,
             FOREIGN KEY(user_id) REFERENCES users(id)
         )
-        """
-    )
-    cur.execute(
+        """,
         """
         CREATE TABLE IF NOT EXISTS sessions (
             token TEXT PRIMARY KEY,
@@ -125,18 +167,18 @@ def ensure_db():
             last_seen TEXT NOT NULL,
             FOREIGN KEY(user_id) REFERENCES users(id)
         )
-        """
-    )
-    cur.execute(
-        """
+        """,
+        f"""
         CREATE TABLE IF NOT EXISTS session_uploads (
             token TEXT PRIMARY KEY,
             filename TEXT NOT NULL,
-            file_bytes BLOB NOT NULL,
+            file_bytes {blob_type} NOT NULL,
             uploaded_at TEXT NOT NULL
         )
-        """
-    )
+        """,
+    ]
+    for statement in statements:
+        cur.execute(statement)
     conn.commit()
     conn.close()
 
@@ -180,14 +222,16 @@ def validate_new_password(password, confirm_password=None):
 
 def update_user_password(user_id, new_password):
     password_hash, salt = hash_password(new_password)
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
+        db_param_sql(
         """
         UPDATE users
         SET password_hash = ?, salt = ?
         WHERE id = ?
-        """,
+        """
+        ),
         (password_hash, salt, user_id),
     )
     conn.commit()
@@ -209,16 +253,18 @@ def create_user(email, name, department, password, is_admin=0):
     if password_issue:
         return False, password_issue
     password_hash, salt = hash_password(password)
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
     try:
         cur.execute(
+            db_param_sql(
             """
             INSERT INTO users (
                 username, name, department, password_hash, salt, is_admin, created_at
             )
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
+            ),
             (
                 email,
                 name,
@@ -230,7 +276,10 @@ def create_user(email, name, department, password, is_admin=0):
             ),
         )
         conn.commit()
-    except sqlite3.IntegrityError:
+    except Exception as exc:
+        if not is_unique_violation(exc):
+            conn.close()
+            raise
         conn.close()
         return False, "An account with this email already exists."
     conn.close()
@@ -241,10 +290,9 @@ def authenticate_user(email, password):
     email = normalize_email_address(email)
     if validate_email_address(email):
         return None
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_db_connection(row_factory=True)
     cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE username = ?", (email,))
+    cur.execute(db_param_sql("SELECT * FROM users WHERE username = ?"), (email,))
     row = cur.fetchone()
     conn.close()
     if row is None:
@@ -266,10 +314,9 @@ def change_user_password(user_id, current_password, new_password):
     if password_issue:
         return False, password_issue
 
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_db_connection(row_factory=True)
     cur = conn.cursor()
-    cur.execute("SELECT password_hash, salt FROM users WHERE id = ?", (user_id,))
+    cur.execute(db_param_sql("SELECT password_hash, salt FROM users WHERE id = ?"), (user_id,))
     row = cur.fetchone()
     if row is None:
         conn.close()
@@ -287,13 +334,15 @@ def change_user_password(user_id, current_password, new_password):
 def create_session(user_id):
     token = token_hex(24)
     now = datetime.now().isoformat()
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
+        db_param_sql(
         """
         INSERT INTO sessions (token, user_id, created_at, last_seen)
         VALUES (?, ?, ?, ?)
         """,
+        ),
         (token, user_id, now, now),
     )
     conn.commit()
@@ -304,21 +353,25 @@ def create_session(user_id):
 def get_user_by_session(token):
     if not token:
         return None
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_db_connection(row_factory=True)
     cur = conn.cursor()
     cur.execute(
+        db_param_sql(
         """
         SELECT u.*
         FROM sessions s
         JOIN users u ON s.user_id = u.id
         WHERE s.token = ?
         """,
+        ),
         (token,),
     )
     row = cur.fetchone()
     if row:
-        cur.execute("UPDATE sessions SET last_seen = ? WHERE token = ?", (datetime.now().isoformat(), token))
+        cur.execute(
+            db_param_sql("UPDATE sessions SET last_seen = ? WHERE token = ?"),
+            (datetime.now().isoformat(), token),
+        )
         conn.commit()
     conn.close()
     if row is None:
@@ -336,9 +389,9 @@ def get_user_by_session(token):
 def delete_session(token):
     if not token:
         return
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("DELETE FROM sessions WHERE token = ?", (token,))
+    cur.execute(db_param_sql("DELETE FROM sessions WHERE token = ?"), (token,))
     conn.commit()
     conn.close()
 
@@ -346,14 +399,24 @@ def delete_session(token):
 def save_session_upload(token, filename, file_bytes):
     if not token or not file_bytes:
         return
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute(
-        """
+    upload_sql = """
         INSERT OR REPLACE INTO session_uploads (token, filename, file_bytes, uploaded_at)
         VALUES (?, ?, ?, ?)
-        """,
-        (token, filename, sqlite3.Binary(file_bytes), datetime.now().isoformat()),
+    """
+    if USE_POSTGRES:
+        upload_sql = """
+            INSERT INTO session_uploads (token, filename, file_bytes, uploaded_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT (token) DO UPDATE SET
+                filename = EXCLUDED.filename,
+                file_bytes = EXCLUDED.file_bytes,
+                uploaded_at = EXCLUDED.uploaded_at
+        """
+    cur.execute(
+        db_param_sql(upload_sql),
+        (token, filename, db_binary(file_bytes), datetime.now().isoformat()),
     )
     conn.commit()
     conn.close()
@@ -362,29 +425,32 @@ def save_session_upload(token, filename, file_bytes):
 def load_session_upload(token):
     if not token:
         return None, None
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
+        db_param_sql(
         """
         SELECT filename, file_bytes
         FROM session_uploads
         WHERE token = ?
         """,
+        ),
         (token,),
     )
     row = cur.fetchone()
     conn.close()
     if not row:
         return None, None
-    return row[0], row[1]
+    file_bytes = bytes(row[1]) if USE_POSTGRES else row[1]
+    return row[0], file_bytes
 
 
 def delete_session_upload(token):
     if not token:
         return
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("DELETE FROM session_uploads WHERE token = ?", (token,))
+    cur.execute(db_param_sql("DELETE FROM session_uploads WHERE token = ?"), (token,))
     conn.commit()
     conn.close()
 
@@ -430,9 +496,10 @@ def record_history(user_id, file_bytes, filename, sheet_name, overview, profile)
     if st.session_state.get("last_history_signature") == signature:
         return
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
+        db_param_sql(
         """
         INSERT INTO history (
             user_id, uploaded_at, filename, sheet_name, total_students, passed, failed,
@@ -440,6 +507,7 @@ def record_history(user_id, file_bytes, filename, sheet_name, overview, profile)
             academic_year, file_hash
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
+        ),
         (
             user_id,
             datetime.now().isoformat(),
@@ -464,10 +532,10 @@ def record_history(user_id, file_bytes, filename, sheet_name, overview, profile)
 
 
 def fetch_history(user_id, limit=200):
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_db_connection(row_factory=True)
     cur = conn.cursor()
     cur.execute(
+        db_param_sql(
         """
         SELECT uploaded_at, filename, sheet_name, total_students, passed, failed, pass_percent,
                average_sgpa, institution, department, class_name, semester, academic_year
@@ -476,6 +544,7 @@ def fetch_history(user_id, limit=200):
         ORDER BY uploaded_at DESC
         LIMIT ?
         """,
+        ),
         (user_id, limit),
     )
     rows = cur.fetchall()

@@ -85,9 +85,8 @@ This repository includes a ready-to-use `render.yaml` blueprint.
 The blueprint configures:
 
 - Python web service named `airas`
-- Starter plan, required for the persistent disk
-- Persistent disk mounted at `/var/data`
-- `AIRAS_DB_PATH=/var/data/airas/app.db`
+- Free Render plan
+- External PostgreSQL database through `DATABASE_URL`
 - Streamlit start command:
 
 ```bash
@@ -100,13 +99,14 @@ Deploy steps:
 2. In Render, create a new Blueprint service from the GitHub repository.
 3. Let Render read `render.yaml`.
 4. Wait for the first build and open the generated app URL.
-5. Create the first faculty account in the hosted app.
+5. In Render Environment, set `DATABASE_URL` to your Neon PostgreSQL connection string.
+6. Create the first faculty account in the hosted app.
 
-Important: the persistent disk is required. Without it, user accounts, login sessions, upload history, and stored workbook bytes can be lost after restart or redeploy.
+Important: on Render Free, do not rely on local SQLite files for hosted accounts. Use an external PostgreSQL database such as Neon so user accounts, login sessions, upload history, and stored workbook bytes survive restarts and redeploys.
 
 ## Environment
 
-The app stores its SQLite database at `AIRAS_DB_PATH` when set. If the variable is missing, it falls back to:
+When `DATABASE_URL` is set, the app stores runtime data in PostgreSQL. Without `DATABASE_URL`, it stores its local SQLite database at `AIRAS_DB_PATH` when set. If both variables are missing, it falls back to:
 
 ```text
 data/app.db
