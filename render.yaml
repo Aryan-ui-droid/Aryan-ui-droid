@@ -2,9 +2,13 @@ services:
   - type: web
     name: airas
     runtime: python
-    plan: free
+    plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: streamlit run dashboard.py --server.port $PORT --server.address 0.0.0.0
+    disk:
+      name: airas-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: AIRAS_DB_PATH
-        value: /tmp/airas/app.db
+        value: /var/data/airas/app.db
