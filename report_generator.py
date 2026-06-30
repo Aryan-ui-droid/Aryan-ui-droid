@@ -226,7 +226,7 @@ class ReportGenerator:
         wb = writer.book
         ws = wb.create_sheet("Grade Sheet")
 
-        max_col = 22  # A to V
+        max_col = 21  # A to U
         end_col = get_column_letter(max_col)
 
         title_font = Font(name="Times New Roman", size=12, bold=True)
@@ -356,7 +356,7 @@ class ReportGenerator:
             ("O", "O", "ATKT", grade_summary.get("failed", 0)),
             ("P", "P", "FAILED", grade_summary.get("overall_failed", 0)),
             ("Q", "T", "Passing % With ATKT", f"{float(grade_summary.get('pass_with_atkt', 0.0)):.2f}%"),
-            ("U", "V", "BEFORE REMEDIAL", "0"),
+            ("U", "U", "BEFORE REMEDIAL", "0"),
         ]
 
         for start_col, end_col, label, value in summary_layout:
@@ -376,26 +376,26 @@ class ReportGenerator:
 
             apply_border_range(f"{start_col}{summary_row}:{end_col}{value_row}")
 
-        apply_border_range(f"A{summary_row}:V{summary_row}")
-        apply_border_range(f"A{value_row}:V{value_row}")
+        apply_border_range(f"A{summary_row}:U{summary_row}")
+        apply_border_range(f"A{value_row}:U{value_row}")
 
         # Grade table headers
         grade_header_row = 16
         grade_subheader_row = 17
 
-        ws.merge_cells(f"C{grade_header_row}:M{grade_header_row}")
+        ws.merge_cells(f"C{grade_header_row}:L{grade_header_row}")
         ws[f"C{grade_header_row}"] = "GRADE"
         ws[f"C{grade_header_row}"].font = header_font
         ws[f"C{grade_header_row}"].fill = yellow_fill
         ws[f"C{grade_header_row}"].alignment = center
         ws[f"C{grade_header_row}"].border = border
 
-        ws.merge_cells(f"O{grade_header_row}:R{grade_header_row}")
-        ws[f"O{grade_header_row}"] = "BEFORE REMEDIAL."
-        ws[f"O{grade_header_row}"].font = header_font
-        ws[f"O{grade_header_row}"].fill = yellow_fill
-        ws[f"O{grade_header_row}"].alignment = center
-        ws[f"O{grade_header_row}"].border = border
+        ws.merge_cells(f"N{grade_header_row}:Q{grade_header_row}")
+        ws[f"N{grade_header_row}"] = "BEFORE REMEDIAL."
+        ws[f"N{grade_header_row}"].font = header_font
+        ws[f"N{grade_header_row}"].fill = yellow_fill
+        ws[f"N{grade_header_row}"].alignment = center
+        ws[f"N{grade_header_row}"].border = border
 
         header_pairs = [
             ("A", "SUB"),
@@ -404,22 +404,21 @@ class ReportGenerator:
             ("D", "A++"),
             ("E", "A+"),
             ("F", "A"),
-            ("G", "AB"),
-            ("H", "B+"),
-            ("I", "B"),
-            ("J", "C+"),
-            ("K", "C"),
-            ("L", "D"),
-            ("M", "F/FAIL"),
-            ("N", "TOTAL"),
-            ("O", "APPEARED"),
-            ("P", "PASS"),
-            ("Q", "FAIL"),
-            ("R", "NOT APPEARED"),
-            ("S", "BEFORE REMEDIAL RESULT"),
-            ("T", "REM(No of stud passed in remedial exam)"),
-            ("U", "AFTER REMEDIAL RESULT"),
-            ("V", "SIGN"),
+            ("G", "B+"),
+            ("H", "B"),
+            ("I", "C+"),
+            ("J", "C"),
+            ("K", "D"),
+            ("L", "F/FAIL"),
+            ("M", "TOTAL"),
+            ("N", "APPEARED"),
+            ("O", "PASS"),
+            ("P", "FAIL"),
+            ("Q", "NOT APPEARED"),
+            ("R", "BEFORE REMEDIAL RESULT"),
+            ("S", "REM(No of stud passed in remedial exam)"),
+            ("T", "AFTER REMEDIAL RESULT"),
+            ("U", "SIGN"),
         ]
 
         for col, label in header_pairs:
@@ -461,18 +460,17 @@ class ReportGenerator:
             "H": 8,
             "I": 8,
             "J": 8,
-            "K": 8,
-            "L": 6,
+            "K": 6,
+            "L": 7,
             "M": 7,
             "N": 7,
             "O": 9,
             "P": 9,
-            "Q": 7,
-            "R": 10,
+            "Q": 10,
+            "R": 14,
             "S": 14,
             "T": 16,
             "U": 14,
-            "V": 12,
         }
         for col_letter, width in column_widths.items():
             ws.column_dimensions[col_letter].width = width
@@ -501,24 +499,23 @@ class ReportGenerator:
                 ws[f"D{r}"] = int(row.get("A++", 0))
                 ws[f"E{r}"] = int(row.get("A+", 0))
                 ws[f"F{r}"] = int(row.get("A", 0))
-                ws[f"G{r}"] = int(row.get("AB", 0))
-                ws[f"H{r}"] = int(row.get("B+", 0))
-                ws[f"I{r}"] = int(row.get("B", 0))
-                ws[f"J{r}"] = int(row.get("C+", 0))
-                ws[f"K{r}"] = int(row.get("C", 0))
-                ws[f"L{r}"] = int(row.get("D", 0))
-                ws[f"M{r}"] = int(row.get("F", 0))
-                ws[f"N{r}"] = int(row.get("total", 0))
-                ws[f"O{r}"] = int(row.get("appeared", 0))
-                ws[f"P{r}"] = int(row.get("passed", 0))
-                ws[f"Q{r}"] = int(row.get("failed", 0))
-                ws[f"R{r}"] = int(row.get("not_appeared", 0))
+                ws[f"G{r}"] = int(row.get("B+", 0))
+                ws[f"H{r}"] = int(row.get("B", 0))
+                ws[f"I{r}"] = int(row.get("C+", 0))
+                ws[f"J{r}"] = int(row.get("C", 0))
+                ws[f"K{r}"] = int(row.get("D", 0))
+                ws[f"L{r}"] = int(row.get("F", 0))
+                ws[f"M{r}"] = int(row.get("total", 0))
+                ws[f"N{r}"] = int(row.get("appeared", 0))
+                ws[f"O{r}"] = int(row.get("passed", 0))
+                ws[f"P{r}"] = int(row.get("failed", 0))
+                ws[f"Q{r}"] = int(row.get("not_appeared", 0))
 
                 before_remedial = row.get("before_remedial_result")
-                ws[f"S{r}"] = "NA" if before_remedial is None else f"{float(before_remedial):.2f}%"
-                ws[f"T{r}"] = "Nil"
-                ws[f"U{r}"] = "NA"
-                ws[f"V{r}"] = ""
+                ws[f"R{r}"] = "NA" if before_remedial is None else f"{float(before_remedial):.2f}%"
+                ws[f"S{r}"] = "Nil"
+                ws[f"T{r}"] = "NA"
+                ws[f"U{r}"] = ""
 
                 ws.row_dimensions[r].height = 18
                 for col in range(1, max_col + 1):

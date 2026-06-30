@@ -6,18 +6,15 @@ import pandas as pd
 class ResultEngine:
     GRADE_BINS = [
         ("O", 90),
-        ("A++", 85),
-        ("A+", 80),
-        ("A", 75),
-        ("AB", 70),
-        ("B+", 65),
-        ("B", 60),
-        ("C+", 55),
-        ("C", 50),
-        ("D", 45),
+        ("A++", 80),
+        ("A+", 70),
+        ("A", 60),
+        ("B+", 55),
+        ("B", 50),
+        ("C+", 45),
         ("F", 0),
     ]
-    GRADE_ORDER = ["O", "A++", "A+", "A", "AB", "B+", "B", "C+", "C", "D", "F"]
+    GRADE_ORDER = ["O", "A++", "A+", "A", "B+", "B", "C+", "C", "D", "F"]
 
     def __init__(self, file_path, sheet_name=0):
         self.file_path = file_path
@@ -666,22 +663,44 @@ class ResultEngine:
         if sgpa >= 9.0:
             return "O"
         if sgpa >= 8.0:
-            return "A+"
+            return "A++"
         if sgpa >= 7.0:
-            return "A"
+            return "A+"
         if sgpa >= 6.0:
+            return "A"
+        if sgpa >= 5.5:
             return "B+"
         if sgpa >= 5.0:
             return "B"
-        if sgpa >= 4.0:
+        if sgpa >= 4.5:
+            return "C+"
+        if sgpa > 4.0:
             return "C"
+        if sgpa == 4.0:
+            return "D"
         return "F"
 
     def _grade_from_percent(self, percent):
+        if pd.isna(percent):
+            return "-"
+        percent = float(percent)
+        if percent == 40:
+            return "D"
+        if 40 < percent < 45:
+            return "C"
         for label, cutoff in self.GRADE_BINS:
             if percent >= cutoff:
                 return label
         return "F"
+
+    def _subject_grade(self, result, marks, scale):
+        result = self._normalize_result_value(result)
+        if result in {"FAIL", "ABSENT"}:
+            return "F"
+        if result != "PASS" or pd.isna(marks):
+            return "-"
+        percent = (float(marks) / scale) * 100 if scale else 0.0
+        return self._grade_from_percent(percent)
 
     def _infer_marks_scale(self, marks_series):
         if marks_series is None or marks_series.empty:
@@ -1011,7 +1030,6 @@ class ResultEngine:
             "A++",
             "A+",
             "A",
-            "AB",
             "B+",
             "B",
             "C+",
@@ -1053,9 +1071,11 @@ class ResultEngine:
 
     def get_student_subject_report(self, roll_no, term_key=None):
         result_cols = self._detect_result_columns()
+        df = self.df
         if term_key:
             result_cols = self.get_term_result_columns(term_key)
-        student = self.df[self.df[self.roll_col].astype(str) == str(roll_no)]
+            df = self.df.loc[self.get_term_active_mask(term_key)]
+        student = df[df[self.roll_col].astype(str) == str(roll_no)]
 
         if student.empty or not result_cols:
             return pd.DataFrame(
@@ -1065,6 +1085,7 @@ class ResultEngine:
                     "subject",
                     "result",
                     "marks",
+                    "grade",
                 ]
             )
 
@@ -1083,6 +1104,8 @@ class ResultEngine:
             result_val = self._normalize_result_value(result_val)
             if not result_val:
                 result_val = "-"
+            _, subject_marks = self._resolve_item_series(df, item)
+            scale = self._infer_marks_scale(subject_marks)
 
             rows.append(
                 {
@@ -1091,6 +1114,7 @@ class ResultEngine:
                     "subject": subject_key,
                     "result": result_val,
                     "marks": marks_val,
+                    "grade": self._subject_grade(result_val, marks_val, scale),
                 }
             )
 

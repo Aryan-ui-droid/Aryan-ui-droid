@@ -576,15 +576,21 @@ def grade_from_sgpa(sgpa):
     if sgpa >= 9.0:
         return "O"
     if sgpa >= 8.0:
-        return "A+"
+        return "A++"
     if sgpa >= 7.0:
-        return "A"
+        return "A+"
     if sgpa >= 6.0:
+        return "A"
+    if sgpa >= 5.5:
         return "B+"
     if sgpa >= 5.0:
         return "B"
-    if sgpa >= 4.0:
+    if sgpa >= 4.5:
+        return "C+"
+    if sgpa > 4.0:
         return "C"
+    if sgpa == 4.0:
+        return "D"
     return "F"
 
 
@@ -3616,7 +3622,6 @@ def render_term_tabs(ctx, theme, risk_threshold):
                     "A++": "A++",
                     "A+": "A+",
                     "A": "A",
-                    "AB": "AB",
                     "B+": "B+",
                     "B": "B",
                     "C+": "C+",
@@ -3760,8 +3765,8 @@ def render_term_tabs(ctx, theme, risk_threshold):
                     """,
                     unsafe_allow_html=True,
                 )
-                details = detail_df[["subject_name", "course_code", "result", "marks"]].copy()
-                details.columns = ["Subject Name", "Course Code", "Result", "Marks"]
+                details = detail_df[["subject_name", "course_code", "result", "marks", "grade"]].copy()
+                details.columns = ["Subject Name", "Course Code", "Result", "Marks", "Grade"]
                 details["Marks"] = details["Marks"].map(lambda v: "-" if pd.isna(v) else f"{float(v):.2f}")
                 st.markdown("<div class='table-kicker'>Student Subject Ledger</div>", unsafe_allow_html=True)
                 st.dataframe(details, use_container_width=True)
