@@ -820,12 +820,10 @@ class ResultEngine:
     def get_class_toppers(self, n=3, term_key=None):
         df = self.df
         sgpa_col = self.sgpa_col
-        grade_col = self.grade_col
 
         if term_key:
             df = df.loc[self.get_term_active_mask(term_key)]
             sgpa_col = self.get_term_sgpa_col(term_key)
-            grade_col = self.get_term_grade_col(term_key)
 
         if not sgpa_col or sgpa_col not in df.columns or df.empty:
             return pd.DataFrame(columns=[self.name_col, self.roll_col, sgpa_col or "sgpa", "grade"])
@@ -834,10 +832,7 @@ class ResultEngine:
         top_df = sorted_df.head(n)
 
         top_df = top_df[[self.name_col, self.roll_col, sgpa_col]].copy()
-        if grade_col and grade_col in df.columns:
-            top_df["grade"] = df.loc[top_df.index, grade_col].astype(str).str.strip()
-        else:
-            top_df["grade"] = top_df[sgpa_col].apply(self._sgpa_to_grade)
+        top_df["grade"] = top_df[sgpa_col].apply(self._sgpa_to_grade)
 
         return top_df.reset_index(drop=True)
 

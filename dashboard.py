@@ -2968,10 +2968,7 @@ def build_term_context(
     roll_series = df_active[engine.roll_col].astype(str) if not df_active.empty else pd.Series(dtype=str)
     sgpa_map = dict(zip(roll_series, sgpa_series))
 
-    if grade_col and grade_col in df_active.columns:
-        grade_map = dict(zip(roll_series, df_active[grade_col].astype(str).str.strip()))
-    else:
-        grade_map = {roll: grade_from_sgpa(sgpa) for roll, sgpa in sgpa_map.items()}
+    grade_map = {roll: grade_from_sgpa(sgpa) for roll, sgpa in sgpa_map.items()}
 
     matrix_rows = []
     for roll, data in matrix.items():
