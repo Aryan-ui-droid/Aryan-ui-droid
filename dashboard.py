@@ -876,6 +876,23 @@ def apply_theme(theme):
             font-size: 0.9rem;
             line-height: 1.55;
         }}
+        .app-credit {{
+            margin: 34px 0 8px;
+            padding: 14px 18px;
+            border-radius: 18px;
+            border: 1px solid var(--soft-border);
+            background: rgba(255, 255, 255, 0.72);
+            box-shadow: 0 14px 32px rgba(18, 35, 63, 0.08);
+            color: var(--muted);
+            text-align: center;
+            font-size: 0.92rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }}
+        .app-credit strong {{
+            color: var(--ink);
+            font-weight: 800;
+        }}
         .hero-wrap {{
             background:
                 linear-gradient(125deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.62) 44%, rgba(255, 255, 255, 0.72) 100%),
@@ -4447,6 +4464,15 @@ def dashboard_screen():
             st.session_state.get(get_summary_filter_state_key(None), ""),
         )
         render_term_tabs(ctx, theme, risk_threshold)
+
+    st.markdown(
+        """
+        <div class="app-credit">
+            Developed by <strong>ARYAN TRIBHUVAN</strong> &amp; <strong>ADINATH AMRUTE</strong>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_dashboard_page():
